@@ -1,17 +1,17 @@
 [project]
-name = "project_or_module_name"
+name = "fast-influxdb-client"
 description = "A_short_description"
 
 # If a project, then you can specify version here
 # version = "0.0.0"
 # If a module, then fetch version dynamically (see [tool.setuptools.dynamic] below)
-# dynamic = ["version"]
+dynamic = ["version"]
 
 readme = "README.md"
 requires-python = ">=3.10"
 license = {file = "LICENSE"}
 authors = [
-  {email = "matthew.davidson@generalfusion.com"},
+  {email = "matthew@davidson.engineering"},
   {name = "Matthew Davidson"}
 ]
 
@@ -21,14 +21,14 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
 ]
 
-# dependencies = [
-#    "numpy",
-#    "my_module @ git+https://github.com/my_github/my_repo.git@tag", 
-# ]
+dependencies = [
+   "influxdb_client",
+   "python-dotenv",
+]
 
 # If a module, then use fetch version from src/module_name/__init__.py
-# [tool.setuptools.dynamic]
-# version = {attr = "module_name.__version__"}
+[tool.setuptools.dynamic]
+version = {attr = "fast_influxdb_client.__version__"}
 
 [project.optional-dependencies]
 test = [

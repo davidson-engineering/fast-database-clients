@@ -1,4 +1,7 @@
 .env
-.venv/*
+.venv
 **/__pycache__/**
 *.egg-info
+*.code-workspace
+.vscode
+.pytest_cache

@@ -1,0 +1,2 @@
+# This file can be used to specify the dependencies for automated testing on github
+pytest==7.2.1

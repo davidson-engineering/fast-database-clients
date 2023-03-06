@@ -72,3 +72,6 @@ class FastInfluxDBClient:
         }]
         #Saving data to InfluxDB
         self.write_data(influx_metric)
+
+    def __repr__(self):
+        return f"FastInfluxDBClient({self.org}, {self.bucket})"

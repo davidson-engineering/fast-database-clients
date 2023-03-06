@@ -30,10 +30,10 @@ class FastInfluxDBClient:
     ORG_VAR = 'ORG'
     BUCKET_VAR = 'BUCKET'
 
-    def __init__(self, envfile=".env"):
-        
-        if envfile:
-            load_dotenv(envfile)
+    def __init__(self, env_filepath=".env"):
+
+        if env_filepath:
+            load_dotenv(env_filepath)
         else:
             load_dotenv()
 

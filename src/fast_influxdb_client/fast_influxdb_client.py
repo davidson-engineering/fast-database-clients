@@ -30,8 +30,12 @@ class FastInfluxDBClient:
     ORG_VAR = 'ORG'
     BUCKET_VAR = 'BUCKET'
 
-    def __init__(self):
-        load_dotenv()
+    def __init__(self, envfile=".env"):
+        
+        if envfile:
+            load_dotenv(envfile)
+        else:
+            load_dotenv()
 
         token = os.getenv(self.TOKEN_VAR)
         url = os.getenv(self.CLIENT_URL_VAR)

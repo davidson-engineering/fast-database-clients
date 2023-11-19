@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 # ----------------------------------------------------------------------------
 # Created By  : Matthew Davidson
-# Created Date: 2023-01-23
+# Created Date: 2023-11-19
 # version ='1.0'
 # ---------------------------------------------------------------------------
-"""a_short_project_description"""
+"""Demonstration of how to use the FastInfluxDBClient class to send metrics to InfluxDB server"""
 # ---------------------------------------------------------------------------
 
 from fast_influxdb_client.fast_influxdb_client import FastInfluxDBClient, InfluxMetric
@@ -13,9 +13,11 @@ import random
 import time
 
 def main():
+    # Create new client
     client = FastInfluxDBClient()
     print(f"{client=}")
 
+    # Generate some random data, and send to influxdb server
     while 1:
         data = random.random()
         metric = InfluxMetric(

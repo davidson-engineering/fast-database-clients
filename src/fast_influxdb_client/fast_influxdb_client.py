@@ -47,39 +47,48 @@ class FastInfluxDBClient:
     ORG_VAR = 'ORG'
     BUCKET_VAR = 'BUCKET'
 
+    client = None
+
     def __init__(self, env_filepath=None):
 
-        if env_filepath:
+        if env_filepath and not os.path.exists(env_filepath):
+            raise ClientEnvVariableNotDefined(f"{env_filepath} does not exist")
+
+        if env_filepath and os.path.exists(env_filepath):
             load_dotenv(env_filepath)
         else:
             load_dotenv()
+
+        for var_name in [self.TOKEN_VAR, self.CLIENT_URL_VAR, self.ORG_VAR, self.BUCKET_VAR]:
+            if os.getenv(var_name) is None:
+                raise ClientEnvVariableNotDefined(f"{var_name} is not defined in .env file")
 
         token = os.getenv(self.TOKEN_VAR)
         url = os.getenv(self.CLIENT_URL_VAR)
         org = os.getenv(self.ORG_VAR)
         bucket = os.getenv(self.BUCKET_VAR)
 
-        for var_name in [self.TOKEN_VAR, self.CLIENT_URL_VAR, self.ORG_VAR, self.BUCKET_VAR]:
-            if os.getenv(var_name) is None:
-                raise ClientEnvVariableNotDefined(f"{var_name} is not defined in .env file")
-
-        self.__class__.client = InfluxDBClient(url=url, token=token)
+        if self.client is None:
+            self.client = InfluxDBClient(url=url, token=token)
         self.org = org
         self.bucket = bucket
 
     def __enter__(self):
         return self
 
+    # def __exit__(self, exc_type, exc_val, exc_tb):
+    #     self.client.close()
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.client.close()
 
     def write_metric(self, metric, write_option=SYNCHRONOUS):
         try:
-            write_api = self.__class__.client.write_api(write_option)
+            write_api = self.client.write_api(write_option)
             write_api.write(self.bucket, self.org , metric, write_precision='s')
         except Exception as e:
             logging.error(f"Failed to write data to InfluxDB: {e}")
-            raise InfluxDBWriteError from e
+            raise InfluxDBWriteError(f"Original exception: {e}")
 
     def write_data(self, measurement:str, fields:dict, time = None):
         if time is None:

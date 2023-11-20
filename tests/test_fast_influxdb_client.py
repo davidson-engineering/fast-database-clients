@@ -9,8 +9,16 @@ TEST_TIME = datetime.utcnow()
 
 # Mocking the InfluxDB server
 class MockInfluxDBClient:
+    def __init__(self):
+        # Add any necessary initialization logic for your mock
+        pass
+
     def write_api(self, write_option):
         return MockWriteApi()
+
+    def close(self):
+        # Implement the close method behavior if needed
+        pass
 
 class MockWriteApi:
     def write(self, bucket, org, metric, write_precision):
@@ -67,20 +75,22 @@ def test_fast_influxdb_client_exit(monkeypatch):
         pass  # If __exit__ doesn't raise an exception, the test passes
 
 def test_fast_influxdb_client_write_error(monkeypatch):
-    # Mock the InfluxDB client to raise an exception
+    # Mock the InfluxDB client to raise an arbitrary exception
     class MockInfluxDBClientWithException:
         def write_api(self, write_option):
             return MockWriteApiWithException()
 
     class MockWriteApiWithException:
         def write(self, bucket, org, metric, write_precision):
-            raise Exception("Test exception")
+            raise Exception("test exception")
 
     monkeypatch.setattr(FastInfluxDBClient, "client", MockInfluxDBClientWithException())
 
     # Test InfluxDBWriteError exception
     client = FastInfluxDBClient()
     metric = InfluxMetric(measurement=TEST_MEASUREMENT, fields=TEST_FIELDS, time=TEST_TIME)
+    
     with pytest.raises(InfluxDBWriteError):
         client.write_metric(metric)
+
 

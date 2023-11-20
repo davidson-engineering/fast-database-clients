@@ -35,7 +35,7 @@ test = [
   "pytest >= 7.4.3",
 ]
 
-# [project.urls]
+[project.urls]
 # homepage = "https://example.com"
 # documentation = "https://readthedocs.org"
 repository = "https://github.com/davidson-engineering/fast-influxdb-client"

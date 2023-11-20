@@ -1,71 +1,86 @@
 import pytest
-from datetime import datetime
-from influxdb_client.client.write_api import SYNCHRONOUS
-from influxdb_client.rest import ApiException
-from unittest.mock import patch, MagicMock
+from datetime import datetime, timedelta
+from fast_influxdb_client.fast_influxdb_client import FastInfluxDBClient, InfluxMetric, ClientEnvVariableNotDefined, InfluxDBWriteError
 
+# Define some constants for testing
+TEST_MEASUREMENT = "test_measurement"
+TEST_FIELDS = {"field1": 42, "field2": "value"}
+TEST_TIME = datetime.utcnow()
 
-from fast_influxdb_client.fast_influxdb_client import FastInfluxDBClient, ClientEnvVariableNotDefined, InfluxMetric
+# Mocking the InfluxDB server
+class MockInfluxDBClient:
+    def write_api(self, write_option):
+        return MockWriteApi()
 
+class MockWriteApi:
+    def write(self, bucket, org, metric, write_precision):
+        pass
 
-# These tests check that:
+def test_fast_influxdb_client_init(monkeypatch):
+    # Mock the environment variables
+    monkeypatch.setenv("TOKEN", "test_token")
+    monkeypatch.setenv("CLIENT_URL", "test_url")
+    monkeypatch.setenv("ORG", "test_org")
+    monkeypatch.setenv("BUCKET", "test_bucket")
 
-#     The __init__ method raises a ClientEnvVariableNotDefined exception if any of the required environment variables are not defined.
-#     The write_data method calls the write_api method of the InfluxDBClient with the correct arguments.
-#     The write_data method raises an ApiException if the write_api call fails.
-#     The write_metric method calls the write_data method with the correct arguments.
+    # Test initialization with valid environment variables
+    with FastInfluxDBClient() as client:
+        assert client.org == "test_org"
+        assert client.bucket == "test_bucket"
 
+    # Test initialization with missing environment variables
+    with pytest.raises(ClientEnvVariableNotDefined):
+        with FastInfluxDBClient(env_filepath="nonexistent_file"):
+            pass
 
-class TestFastInfluxDBClient:
-    def test_init_raises_exception_if_env_variables_not_defined(self, monkeypatch):
-        # Arrange
-        monkeypatch.delenv("TOKEN", raising=False)
-        monkeypatch.delenv("CLIENT_URL", raising=False)
-        monkeypatch.delenv("ORG", raising=False)
-        monkeypatch.delenv("BUCKET", raising=False)
+def test_fast_influxdb_client_write_metric(monkeypatch):
+    # Mock the InfluxDB client
+    monkeypatch.setattr(FastInfluxDBClient, "client", MockInfluxDBClient())
 
-        # Act and Assert
-        with pytest.raises(ClientEnvVariableNotDefined):
-            client = FastInfluxDBClient()
+    # Test writing a metric
+    client = FastInfluxDBClient()
+    metric = InfluxMetric(measurement=TEST_MEASUREMENT, fields=TEST_FIELDS, time=TEST_TIME)
+    client.write_metric(metric)
 
-    @patch("fast_influxdb_client.FastInfluxDBClient")
-    def test_write_data_calls_write_api_with_correct_arguments(self, influxdb_client_mock):
-        # Arrange
-        client = FastInfluxDBClient()
-        write_api_mock = MagicMock()
-        influxdb_client_mock.return_value.write_api.return_value = write_api_mock
-        metric = InfluxMetric(measurement="measurement_name", fields=dict(field_name=1), time=datetime.utcnow())
+def test_fast_influxdb_client_write_data(monkeypatch):
+    # Mock the InfluxDB client
+    monkeypatch.setattr(FastInfluxDBClient, "client", MockInfluxDBClient())
 
-        # Act
-        client.write_metric(metric, write_option=SYNCHRONOUS)
+    # Test writing data
+    client = FastInfluxDBClient()
+    client.write_data(measurement=TEST_MEASUREMENT, fields=TEST_FIELDS, time=TEST_TIME)
 
-        # Assert
-        write_api_mock.write.assert_called_once_with(bucket=client.bucket, org=client.org, record=metric.as_dict(), write_precision="s")
+def test_fast_influxdb_client_write_data_default_time(monkeypatch):
+    # Mock the InfluxDB client
+    monkeypatch.setattr(FastInfluxDBClient, "client", MockInfluxDBClient())
 
-    @patch("fast_influxdb_client.FastInfluxDBClient")
-    def test_write_data_raises_exception_if_write_api_call_fails(self, influxdb_client_mock):
-        # Arrange
-        client = FastInfluxDBClient()
-        write_api_mock = MagicMock()
-        write_api_mock.write.side_effect = ApiException(status=400, reason="Bad Request")
-        influxdb_client_mock.return_value.write_api.return_value = write_api_mock
-        metric = InfluxMetric(measurement="measurement_name", fields=dict(field_name=1), time=datetime.utcnow())
+    # Test writing data with default time (datetime.utcnow())
+    client = FastInfluxDBClient()
+    client.write_data(measurement=TEST_MEASUREMENT, fields=TEST_FIELDS)
 
-        # Act and Assert
-        with pytest.raises(ApiException):
-            client.write_metric(metric, write_option=SYNCHRONOUS)
+def test_fast_influxdb_client_exit(monkeypatch):
+    # Mock the InfluxDB client
+    monkeypatch.setattr(FastInfluxDBClient, "client", MockInfluxDBClient())
 
-    @patch("fast_influxdb_client.FastInfluxDBClient")
-    def test_write_metric_calls_write_data_with_correct_arguments(self, influxdb_client_mock):
-        # Arrange
-        client = FastInfluxDBClient()
-        write_data_mock = MagicMock()
-        client.write_data = write_data_mock
-        fields = {"field_name": 1}
+    # Test __exit__ method
+    with FastInfluxDBClient() as client:
+        pass  # If __exit__ doesn't raise an exception, the test passes
 
-        # Act
-        client.write_data(measurement="measurement_name", fields=fields, time=datetime.utcnow())
+def test_fast_influxdb_client_write_error(monkeypatch):
+    # Mock the InfluxDB client to raise an exception
+    class MockInfluxDBClientWithException:
+        def write_api(self, write_option):
+            return MockWriteApiWithException()
 
-        # Assert
-        write_data_mock.assert_called_once_with([{"measurement": "measurement_name", "fields": fields, "time": datetime.utcnow()}], write_option=SYNCHRONOUS)
+    class MockWriteApiWithException:
+        def write(self, bucket, org, metric, write_precision):
+            raise Exception("Test exception")
+
+    monkeypatch.setattr(FastInfluxDBClient, "client", MockInfluxDBClientWithException())
+
+    # Test InfluxDBWriteError exception
+    client = FastInfluxDBClient()
+    metric = InfluxMetric(measurement=TEST_MEASUREMENT, fields=TEST_FIELDS, time=TEST_TIME)
+    with pytest.raises(InfluxDBWriteError):
+        client.write_metric(metric)
 

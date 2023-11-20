@@ -1,6 +1,6 @@
 [project]
 name = "fast-influxdb-client"
-description = "A_short_description"
+description = "A class to facilitate rapid deployment of a class to send metrics to an InfluxDB server"
 
 # If a project, then you can specify version here
 # version = "0.0.0"
@@ -32,13 +32,13 @@ version = {attr = "fast_influxdb_client.__version__"}
 
 [project.optional-dependencies]
 test = [
-  "pytest >= 7.1.1",
+  "pytest >= 7.4.3",
 ]
 
 # [project.urls]
 # homepage = "https://example.com"
 # documentation = "https://readthedocs.org"
-# repository = "https://github.com"
+repository = "https://github.com/davidson-engineering/fast-influxdb-client"
 # changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
 
 # [project.scripts]

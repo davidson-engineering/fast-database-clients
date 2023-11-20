@@ -7,7 +7,7 @@
 # ---------------------------------------------------------------------------
 """a_short_module_description"""
 # ---------------------------------------------------------------------------
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict, field
 from datetime import datetime
 from dotenv import load_dotenv
 import os
@@ -26,11 +26,14 @@ class InfluxDBWriteError(Exception):
 class InfluxMetric:
     measurement: str
     fields: dict
-    time: datetime = datetime.utcnow()
+    time: datetime = field(default_factory=datetime.utcnow)
 
     def __repr__(self) -> str:
         fields = [f"{k}:{v}" for k,v in self.fields]
         return f"{self.__class__.__name__}: {self.measurement}-{fields} at {self.time}"
+
+    def as_dict(self) -> dict:
+        return asdict(self)
 
 
 
@@ -78,14 +81,16 @@ class FastInfluxDBClient:
             logging.error(f"Failed to write data to InfluxDB: {e}")
             raise InfluxDBWriteError from e
 
-    def write_data(self, name:str, fields:dict, time = datetime.utcnow()):
+    def write_data(self, measurement:str, fields:dict, time = None):
+        if time is None:
+            time = datetime.utcnow()
         influx_metric = InfluxMetric(
-            measurement=name,
+            measurement=measurement,
             time=time,
             fields=fields
         )
         #Saving data to InfluxDB
-        self.write_data(influx_metric)
+        self.write_metric(influx_metric)
 
     def __repr__(self):
         return f"FastInfluxDBClient({self.org}, {self.bucket})"

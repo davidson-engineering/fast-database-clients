@@ -3,7 +3,7 @@
 A class to facilitate rapid deployment of a class to send metrics to an InfluxDB server.
 
 
-```
+```python
 from fast_influxdb_client.fast_influxdb_client import FastInfluxDBClient, InfluxMetric
 import random
 

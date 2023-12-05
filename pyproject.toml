@@ -8,7 +8,7 @@ description = "A class to facilitate rapid deployment of a class to send metrics
 dynamic = ["version"]
 
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.8"
 license = {file = "LICENSE"}
 authors = [
   {email = "matthew@davidson.engineering"},
@@ -18,7 +18,11 @@ authors = [
 classifiers = [
     "Development Status :: 1 - Planning",
     "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 
 dependencies = [

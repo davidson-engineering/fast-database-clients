@@ -5,23 +5,20 @@
 # Created Date: 2023-03-01
 # ---------------------------------------------------------------------------
 """FastInfluxDBClient is a class to enable rapid deployment of a client to send metrics to InfluxDB server"""
+
 # ---------------------------------------------------------------------------
 from dataclasses import dataclass, asdict, field
 from datetime import datetime
-from dotenv import load_dotenv
-import os
+from datetime import timezone
 from influxdb_client import InfluxDBClient
 from influxdb_client.client.write_api import SYNCHRONOUS
 import logging
 
-
-class ClientEnvVariableNotDefined(Exception):
-    pass
-
-
 class InfluxDBWriteError(Exception):
     pass
 
+class FastInfluxDBClientConfigError(Exception):
+    pass
 
 @dataclass
 class InfluxMetric:
@@ -31,7 +28,7 @@ class InfluxMetric:
     tags: dict = field(default_factory=dict)
 
     def __repr__(self) -> str:
-        fields = [f"{k}:{v}" for k, v in self.fields]
+        fields = [f"{k}:{v}" for k, v in self.fields.items()]
         return f"{self.__class__.__name__}: {self.measurement}-{fields} at {self.time}"
 
     def as_dict(self) -> dict:
@@ -39,12 +36,12 @@ class InfluxMetric:
 
 
 class InfluxDBLoggingHandler(logging.Handler):
-    def __init__(self, client, bucket=None, org=None, measurement="logging", **kwargs):
+    def __init__(self, client, bucket=None, org=None, measurement="logs", **kwargs):
         super().__init__(**kwargs)
-        self.client = client
-        self.bucket = bucket or client.bucket
-        self.org = org or client.org
+        self._client = client
         self.measurement = measurement
+        self.org = org or client.default_org
+        self.log_bucket = bucket or client.default_bucket
 
     def emit(self, record):
         try:
@@ -57,74 +54,51 @@ class InfluxDBLoggingHandler(logging.Handler):
                 lineno=record.lineno,
             )
             influx_metric = InfluxMetric(
-                measurement=self.measurement, fields=fields, time=record.created
+                measurement=self.measurement, fields=fields, time=datetime.fromisoformat(record.asctime)
             )
-            write_api = self.client.write_api()
-            write_api.write(self.bucket, self.org, influx_metric, write_precision="s")
+            write_api = self._client.write_api()
+            write_api.write(self.log_bucket, self.org, influx_metric, write_precision="s")
         except Exception:
             self.handleError(record)
 
 
-class FastInfluxDBClient:
+class FastInfluxDBClient(InfluxDBClient):
     """
     A class for sending data to an InfluxDB server using the InfluxDB client API.
     """
 
-    TOKEN_VAR = "TOKEN"
-    CLIENT_URL_VAR = "CLIENT_URL"
-    ORG_VAR = "ORG"
-    BUCKET_VAR = "BUCKET"
+    def __init__(self, url, token: str = None, default_bucket=None, debug=None, timeout=10_000, enable_gzip=False, org: str = None, default_tags: dict = None, **kwargs):
+        self.default_org = org
+        self.default_bucket = default_bucket
+        super().__init__(url, token, debug, timeout, enable_gzip, org, default_tags, **kwargs)
 
-    client = None
-
-    def __init__(self, env_filepath=None):
-        if env_filepath and not os.path.exists(env_filepath):
-            raise ClientEnvVariableNotDefined(f"{env_filepath} does not exist")
-
-        if env_filepath and os.path.exists(env_filepath):
-            load_dotenv(env_filepath)
-        else:
-            load_dotenv()
-
-        for var_name in [
-            self.TOKEN_VAR,
-            self.CLIENT_URL_VAR,
-            self.ORG_VAR,
-            self.BUCKET_VAR,
-        ]:
-            if os.getenv(var_name) is None:
-                raise ClientEnvVariableNotDefined(
-                    f"{var_name} is not defined in .env file"
-                )
-
-        token = os.getenv(self.TOKEN_VAR)
-        url = os.getenv(self.CLIENT_URL_VAR)
-        org = os.getenv(self.ORG_VAR)
-        bucket = os.getenv(self.BUCKET_VAR)
-
-        if self.client is None:
-            self.client = InfluxDBClient(url=url, token=token)
-        self.org = org
-        self.bucket = bucket
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.client.close()
+    @classmethod
+    def from_config_file(cls, config_file: str = "config.ini", debug:None = None, enable_gzip: bool = False, **kwargs):
+        client = cls._from_config_file(config_file, debug, enable_gzip, **kwargs)
+        client.default_org = client.org
+        return client
 
     def write_metric(self, metric, write_option=SYNCHRONOUS, bucket=None, org=None):
+
         if bucket is None:
-            bucket = self.bucket
+            if self.default_bucket is not None:
+                bucket = self.default_bucket
+            else:
+                raise FastInfluxDBClientConfigError("No bucket or default bucket specified")
+            
         if org is None:
-            org = self.org
+            if self.default_org is not None:
+                org = self.default_org
+            else:
+                raise FastInfluxDBClientConfigError("No org or default org specified") 
+        
         try:
             # Check if fields contain invalid types before attempting to write
             for value in metric.fields.values():
                 if not isinstance(value, (str, int, float, bool, datetime)):
                     raise ValueError(f"Invalid field type: {type(value)}")
 
-            write_api = self.client.write_api(write_option)
+            write_api = self.write_api(write_option)
             write_api.write(bucket, org, metric, write_precision="s")
         except Exception as e:
             logging.error(f"Failed to write data to InfluxDB: {e}")
@@ -132,13 +106,13 @@ class FastInfluxDBClient:
 
     def write_data(self, measurement: str, fields: dict, time=None):
         if time is None:
-            time = datetime.utcnow()
+            time = datetime.now(timezone.utc)
         influx_metric = InfluxMetric(measurement=measurement, time=time, fields=fields)
         # Saving data to InfluxDB
         self.write_metric(influx_metric)
 
     def __repr__(self):
-        return f"FastInfluxDBClient({self.org}, {self.bucket})"
+        return f"FastInfluxDBClient({self.default_org}, {self.default_bucket})"
 
     def get_logging_handler(self, datefmt="%Y-%m-%dT%H:%M:%S%z"):
         logging_handler = InfluxDBLoggingHandler(self)

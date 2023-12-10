@@ -14,6 +14,7 @@ from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.write_api import SYNCHRONOUS
 import logging
 from influxdb_client.rest import ApiException
+from typing import Union
 
 
 class InfluxDBWriteError(Exception):
@@ -177,7 +178,7 @@ class FastInfluxDBClient(InfluxDBClient):
 
     def write_metric(
         self,
-        metric: InfluxMetric | dict,
+        metric: Union[InfluxMetric, dict],
         write_option=SYNCHRONOUS,
         bucket: str = None,
         org: str = None,

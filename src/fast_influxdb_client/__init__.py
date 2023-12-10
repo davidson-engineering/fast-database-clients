@@ -1,3 +1,6 @@
 __version__ = "0.1.1"
 
-from fast_influxdb_client.fast_influxdb_client import FastInfluxDBClient, InfluxMetric
+from fast_influxdb_client.fast_influxdb_client import FastInfluxDBClient
+from fast_influxdb_client.fast_influxdb_client import InfluxMetric
+from fast_influxdb_client.fast_influxdb_client import InfluxDBLoggingHandler
+from fast_influxdb_client.fast_influxdb_client import convert_to_seconds

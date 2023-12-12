@@ -16,27 +16,36 @@ import logging
 from datetime import datetime, timezone
 
 
-def setup_logging(influxdb_handler):
+def setup_logging(client):
     # get __main__ logger
     logger = logging.getLogger("fast_influxdb_client.fast_influxdb_client")
-    logger.setLevel(logging.DEBUG)
 
-    # setup logging to console
+    # setup logging handler to console
     ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
+    # setup logging handler to file
+    fh = logging.FileHandler("test.log")
+    # setup logging handler to influxdb
+    influx_handler = client.get_logging_handler()
 
-    # setup logging to influxdb
-    influxdb_handler.setLevel(logging.INFO)
+    # set logging levels
+    logger.setLevel(logging.DEBUG)
+    ch.setLevel(logging.INFO)
+    fh.setLevel(logging.DEBUG)
+    influx_handler.setLevel(logging.INFO)
 
     # setup logging format
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y%m%d %H:%M:%S",
     )
     ch.setFormatter(formatter)
-    influxdb_handler.setFormatter(formatter)
+    fh.setFormatter(formatter)
+    influx_handler.setFormatter(formatter)
 
+    # add handlers to logger
     logger.addHandler(ch)
-    logger.addHandler(influxdb_handler)
+    logger.addHandler(fh)
+    logger.addHandler(influx_handler)
 
     return logger
 
@@ -49,8 +58,8 @@ def main():
     print(f"{client=}")
     client.default_bucket = bucket
     # client.create_bucket(bucket)
-    logger = setup_logging(client.get_logging_handler())
-    client.update_bucket(bucket, retention_duration="10d")
+    logger = setup_logging(client)
+    # client.update_bucket(bucket, retention_duration="10d")
 
     # Generate some random data, and send to influxdb server
     while 1:

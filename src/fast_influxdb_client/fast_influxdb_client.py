@@ -7,10 +7,10 @@
 """FastInfluxDBClient is a class to enable rapid deployment of a client to send metrics to InfluxDB server"""
 
 # ---------------------------------------------------------------------------
-from dataclasses import dataclass, asdict, field
+
 from datetime import datetime
 from datetime import timezone
-from influxdb_client import InfluxDBClient, Point
+from influxdb_client import InfluxDBClient
 from influxdb_client.client.write_api import SYNCHRONOUS
 import logging
 from influxdb_client.rest import ApiException
@@ -26,6 +26,8 @@ class FastInfluxDBClientConfigError(Exception):
 
 
 import re
+
+logger = logging.getLogger(__name__)
 
 
 def convert_to_seconds(time_string):
@@ -69,9 +71,6 @@ class InfluxMetric:
     def __repr__(self) -> str:
         fields = [f"{k}:{v}" for k, v in self.fields.items()]
         return f"{self.__class__.__name__}: {self.measurement}-{fields} at {self.time}"
-
-    def as_dict(self) -> dict:
-        return asdict(self)
 
 
 class InfluxDBLoggingHandler(logging.Handler):
@@ -216,10 +215,11 @@ class FastInfluxDBClient(InfluxDBClient):
 
             write_api = self.write_api(write_option)
             write_api.write(bucket, org, metric, write_precision="s")
-            logging.debug(f"Sent metric: {metric} to {bucket} using client {self}")
+
+            logger.debug(f"Sent metric: {metric} to {bucket} using client {self}")
 
         except Exception as e:
-            logging.error(f"Failed to write data to InfluxDB: {e}")
+            logger.error(f"Failed to write data to InfluxDB: {e}")
             raise InfluxDBWriteError(f"Failed to write metric: {e}") from e
 
     def write_data(self, measurement: str, fields: dict, time=None):
@@ -267,7 +267,7 @@ class FastInfluxDBClient(InfluxDBClient):
 
         except ApiException as e:
             if e.status == 422:
-                logging.warning(
+                logger.warning(
                     f"Bucket {bucket_name} already exists. Bucket not created"
                 )
             else:
@@ -286,6 +286,9 @@ class FastInfluxDBClient(InfluxDBClient):
             {"type": "expire", "everySeconds": retention_duration_secs}
         ]
         self.buckets_api().update_bucket(bucket=bucket)
+        logger.info(
+            f"Updated bucket name:'{bucket_name}' retention policy: {retention_duration}"
+        )
 
     def list_buckets(self):
         """List all buckets

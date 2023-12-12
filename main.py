@@ -17,20 +17,28 @@ from datetime import datetime, timezone
 
 
 def setup_logging(influxdb_handler):
-    # get root logger
-    logger = logging.getLogger()
+    # get __main__ logger
+    logger = logging.getLogger("fast_influxdb_client.fast_influxdb_client")
+    logger.setLevel(logging.DEBUG)
+
     # setup logging to console
     ch = logging.StreamHandler()
     ch.setLevel(logging.INFO)
+
     # setup logging to influxdb
-    logger.setLevel(logging.INFO)
-    logger.addHandler(influxdb_handler)
+    influxdb_handler.setLevel(logging.INFO)
+
     # setup logging format
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
     ch.setFormatter(formatter)
+    influxdb_handler.setFormatter(formatter)
+
     logger.addHandler(ch)
+    logger.addHandler(influxdb_handler)
+
+    return logger
 
 
 def main():
@@ -41,7 +49,8 @@ def main():
     print(f"{client=}")
     client.default_bucket = bucket
     # client.create_bucket(bucket)
-    setup_logging(client.get_logging_handler())
+    logger = setup_logging(client.get_logging_handler())
+    client.update_bucket(bucket, retention_duration="10d")
 
     # Generate some random data, and send to influxdb server
     while 1:
@@ -56,7 +65,7 @@ def main():
         )
 
         client.write_metric(metric)
-        logging.info(f"Sent metric: {metric}")
+        # logger.info(f"Sent metric: {metric}")
         time.sleep(1)
 
 

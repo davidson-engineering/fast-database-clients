@@ -15,6 +15,9 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 import logging
 from influxdb_client.rest import ApiException
 from typing import Union
+import re
+
+logger = logging.getLogger(__name__)
 
 
 class InfluxDBWriteError(Exception):
@@ -25,9 +28,8 @@ class FastInfluxDBClientConfigError(Exception):
     pass
 
 
-import re
-
-logger = logging.getLogger(__name__)
+class BucketNotFoundError(Exception):
+    pass
 
 
 def convert_to_seconds(time_string):
@@ -112,7 +114,8 @@ class InfluxDBLoggingHandler(logging.Handler):
             )
 
             try:
-                time = datetime.fromisoformat(record.asctime)
+                # time = datetime.fromisoformat(record.asctime)
+                time = datetime.fromtimestamp(record.created)
             except ValueError:
                 date_format = "%Y-%m-%dT%H:%M:%S%z"
                 time = datetime.strptime(record.asctime, date_format)
@@ -149,11 +152,11 @@ class FastInfluxDBClient(InfluxDBClient):
         default_tags: dict = None,
         **kwargs,
     ):
-        self.default_org = org
-        self.default_bucket = default_bucket
         super().__init__(
             url, token, debug, timeout, enable_gzip, org, default_tags, **kwargs
         )
+        self.default_org = org
+        self.default_bucket = default_bucket
 
     @classmethod
     def from_config_file(
@@ -195,14 +198,14 @@ class FastInfluxDBClient(InfluxDBClient):
                 bucket = self.default_bucket
             else:
                 raise FastInfluxDBClientConfigError(
-                    "No bucket or default bucket specified"
+                    "No bucket or default_bucket specified"
                 )
 
         if org is None:
             if self.default_org is not None:
                 org = self.default_org
             else:
-                raise FastInfluxDBClientConfigError("No org or default org specified")
+                raise FastInfluxDBClientConfigError("No org or default_org specified")
 
         if isinstance(metric, dict):
             metric = InfluxMetric(**metric)
@@ -213,10 +216,15 @@ class FastInfluxDBClient(InfluxDBClient):
                 if not isinstance(value, (str, int, float, bool, datetime)):
                     raise ValueError(f"Invalid field type: {type(value)}")
 
+            if not self.bucket_exists(bucket):
+                raise BucketNotFoundError(f"Bucket '{bucket}' not found")
+
             write_api = self.write_api(write_option)
             write_api.write(bucket, org, metric, write_precision="s")
 
-            logger.debug(f"Sent metric: {metric} to {bucket} using client {self}")
+            logger.info(f"Sent metric to bucket: '{bucket}'")
+            logger.debug(f"client: {self}")
+            logger.debug(str(metric))
 
         except Exception as e:
             logger.error(f"Failed to write data to InfluxDB: {e}")
@@ -273,6 +281,13 @@ class FastInfluxDBClient(InfluxDBClient):
             else:
                 raise e
 
+    def find_bucket(self, bucket_name: str):
+        """Find a bucket by name
+        :param bucket_name: bucket name
+        :return: bucket object
+        """
+        return self.buckets_api().find_bucket_by_name(bucket_name)
+
     def update_bucket(self, bucket_name: str, retention_duration: str = "30d"):
         """Update a bucket
         :param bucket_name: bucket name
@@ -280,7 +295,9 @@ class FastInfluxDBClient(InfluxDBClient):
         :return: None
         """
         # find bucket by name
-        bucket = self.buckets_api().find_bucket_by_name(bucket_name=bucket_name)
+        if bucket := self.find_bucket(bucket_name):
+            raise BucketNotFoundError(f"Bucket '{bucket_name}' not found")
+
         retention_duration_secs = convert_to_seconds(retention_duration)
         bucket.retention_rules = [
             {"type": "expire", "everySeconds": retention_duration_secs}
@@ -289,6 +306,19 @@ class FastInfluxDBClient(InfluxDBClient):
         logger.info(
             f"Updated bucket name:'{bucket_name}' retention policy: {retention_duration}"
         )
+
+    def bucket_exists(self, bucket_name: str):
+        """Verify that a bucket exists
+        :param bucket_name: bucket name
+        :return: True if bucket exists, False if not
+        """
+        try:
+            if self.find_bucket(bucket_name) is None:
+                return False
+            else:
+                return True
+        except ApiException as e:
+            raise e
 
     def list_buckets(self):
         """List all buckets

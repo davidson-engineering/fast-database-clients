@@ -27,7 +27,6 @@ classifiers = [
 
 dependencies = [
    "influxdb_client >= 1.38.0",
-   "python-dotenv",
 ]
 
 # If a module, then use fetch version from src/module_name/__init__.py

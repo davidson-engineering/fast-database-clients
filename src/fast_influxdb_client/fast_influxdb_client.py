@@ -7,25 +7,32 @@
 """FastInfluxDBClient is a class to enable rapid deployment of a client to send metrics to InfluxDB server"""
 
 # ---------------------------------------------------------------------------
-from dataclasses import dataclass, asdict, field
-from datetime import datetime
-from datetime import timezone
-from influxdb_client import InfluxDBClient, Point
-from influxdb_client.client.write_api import SYNCHRONOUS
-import logging
-from influxdb_client.rest import ApiException
+from dataclasses import dataclass
+from datetime import datetime, UTC
 from typing import Union
-
-
-class InfluxDBWriteError(Exception):
-    pass
-
-
-class FastInfluxDBClientConfigError(Exception):
-    pass
-
-
 import re
+from datetime import datetime
+import logging
+import os
+import sys
+
+from influxdb_client import InfluxDBClient
+from influxdb_client.client.exceptions import InfluxDBError
+from influxdb_client.client.write_api import SYNCHRONOUS
+from influxdb_client.rest import ApiException
+from logging_outcome_message import LoggingActionOutcome, SUCCESS, FAILED
+
+logger = logging.getLogger(__name__)
+
+class Error(Exception):
+    def __init__(self, message):
+        self.message = message
+        logger.error(message)
+
+
+class FastInfluxDBClientConfigError(Error):
+    pass
+
 
 
 def convert_to_seconds(time_string):
@@ -63,15 +70,16 @@ class InfluxMetric:
     ) -> None:
         self.measurement = measurement
         self.fields = fields or {}
-        self.time = time or datetime.now(timezone.utc)
         self.tags = tags or {}
+        if isinstance(time, datetime):
+            self.time = time
+        else:
+            self.time = datetime.now(UTC)
 
     def __repr__(self) -> str:
         fields = [f"{k}:{v}" for k, v in self.fields.items()]
         return f"{self.__class__.__name__}: {self.measurement}-{fields} at {self.time}"
 
-    def as_dict(self) -> dict:
-        return asdict(self)
 
 
 class InfluxDBLoggingHandler(logging.Handler):
@@ -86,7 +94,6 @@ class InfluxDBLoggingHandler(logging.Handler):
     ):
         """
         Create a logging handler to send logs to InfluxDB
-        :param name: name of logger
         :param client: FastInfluxDBClient object
         :param name: name of logger
         :param bucket: bucket name
@@ -172,6 +179,10 @@ class FastInfluxDBClient(InfluxDBClient):
         :param kwargs: additional keyword arguments
         :return: FastInfluxDBClient object
         """
+        # check if config file exisit
+        if not os.path.exists(config_file):
+            raise FastInfluxDBClientConfigError("Config file '{config_file}' does not exist")
+ 
         client = cls._from_config_file(config_file, debug, enable_gzip, **kwargs)
         client.default_org = client.org
         return client
@@ -208,19 +219,22 @@ class FastInfluxDBClient(InfluxDBClient):
         if isinstance(metric, dict):
             metric = InfluxMetric(**metric)
 
+        log_action_outcome = LoggingActionOutcome(action=f"Sending metric:{metric} to bucket:'{bucket}' on influxdb at {self.url}")
+
         try:
             # Check if fields contain invalid types before attempting to write
             for value in metric.fields.values():
                 if not isinstance(value, (str, int, float, bool, datetime)):
                     raise ValueError(f"Invalid field type: {type(value)}")
 
-            write_api = self.write_api(write_option)
-            write_api.write(bucket, org, metric, write_precision="s")
-            logging.debug(f"Sent metric: {metric} to {bucket} using client {self}")
+            self.write_api(write_options=write_option).write(bucket=bucket, org=org, record=metric.__dict__, write_precision="s")
+            logger.info(f"Sent metric to bucket:'{bucket}' on influxdb at {self.url}")
+            logger.debug(log_action_outcome(outcome=SUCCESS))
 
-        except Exception as e:
-            logging.error(f"Failed to write data to InfluxDB: {e}")
-            raise InfluxDBWriteError(f"Failed to write metric: {e}") from e
+
+        except InfluxDBError as e:
+            logger.error(log_action_outcome(outcome=FAILED))
+            raise Exception(f"Failed to write metric: {e}") from e
 
     def write_data(self, measurement: str, fields: dict, time=None):
         """package some data into an InfluxMetric object, and send it to InfluxDB
@@ -230,7 +244,7 @@ class FastInfluxDBClient(InfluxDBClient):
         :return: None
         """
         if time is None:
-            time = datetime.now(timezone.utc)
+            time = datetime.now(UTC)
         influx_metric = InfluxMetric(measurement=measurement, time=time, fields=fields)
         # Saving data to InfluxDB
         self.write_metric(influx_metric)
@@ -292,6 +306,11 @@ class FastInfluxDBClient(InfluxDBClient):
         :return: list of buckets
         """
         return self.buckets_api().find_buckets()
+    
+    def enable_verbose_logging_to_console(self):
+        for _, logger in self.conf.loggers.items():
+            logger.setLevel(logging.DEBUG)
+            logger.addHandler(logging.StreamHandler(sys.stdout))
 
 
 def main():

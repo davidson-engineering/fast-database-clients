@@ -16,34 +16,38 @@ import logging
 from datetime import datetime, UTC
 
 
-def setup_logging(influxdb_handler):
+def setup_logging(client):
+    # get __main__ logger
+    logger = logging.getLogger("fast_influxdb_client.fast_influxdb_client")
 
-    # get root logger
-    logger = logging.getLogger('fast_influxdb_client.fast_influxdb_client')
-    logger.setLevel(logging.INFO)
+    # setup logging handler to console
+    ch = logging.StreamHandler()
+    # setup logging handler to file
+    fh = logging.FileHandler("test.log")
+    # setup logging handler to influxdb
+    influx_handler = client.get_logging_handler()
+
+    # set logging levels
+    logger.setLevel(logging.DEBUG)
+    ch.setLevel(logging.INFO)
+    fh.setLevel(logging.DEBUG)
+    influx_handler.setLevel(logging.INFO)
 
     # setup logging format
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y%m%d %H:%M:%S",
     )
 
     # setup logging to console
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.INFO)
     ch.setFormatter(formatter)
-
-    # setup logging to file
-    fh = logging.FileHandler("test.log")
-    fh.setLevel(logging.DEBUG)
     fh.setFormatter(formatter)
+    influx_handler.setFormatter(formatter)
 
-    # setup logging to influxdb
-    influxdb_handler.setLevel(logging.DEBUG)
-    influxdb_handler.setFormatter(formatter)
-
-    logger.addHandler(influxdb_handler)
+    # add handlers to logger
     logger.addHandler(ch)
     logger.addHandler(fh)
+    logger.addHandler(influx_handler)
 
     return logger
 
@@ -55,9 +59,9 @@ def main():
     client = FastInfluxDBClient.from_config_file(config_file=config_file)
     print(f"{client=}")
     client.default_bucket = bucket
-    client.create_bucket(bucket)
-    logger = setup_logging(client.get_logging_handler())
-
+    # client.create_bucket(bucket)
+    logger = setup_logging(client)
+    # client.update_bucket(bucket, retention_duration="10d")
 
     # Generate some random data, and send to influxdb server
     while 1:
@@ -72,6 +76,7 @@ def main():
         )
 
         client.write_metric(metric)
+        # logger.info(f"Sent metric: {metric}")
         time.sleep(1)
 
 

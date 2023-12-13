@@ -131,10 +131,10 @@ class InfluxDBLoggingHandler(logging.Handler):
                 time=time,
             )
 
-            write_api = self._client.write_api()
-            write_api.write(
+            self._client.write_api().write(
                 self.log_bucket, self.org, influx_metric, write_precision="s"
             )
+            
 
         except Exception:
             self.handleError(record)

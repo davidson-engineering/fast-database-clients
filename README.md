@@ -50,8 +50,7 @@ logger.setLevel(logging.DEBUG)
 influx_handler.setLevel(logging.INFO)
 
 formatter = logging.Formatter(
-    fmt="%(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y%m%d %H:%M:%S",
+    fmt="%(name)s - %(levelname)s - %(message)s"
 )
 influx_handler.setFormatter(formatter)
 

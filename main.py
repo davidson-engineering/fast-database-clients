@@ -13,7 +13,7 @@ from fast_influxdb_client import FastInfluxDBClient, InfluxMetric
 import random
 import time
 import logging
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 
 
 def setup_logging(client):
@@ -61,7 +61,7 @@ def main():
     client.default_bucket = bucket
     # client.create_bucket(bucket)
     logger = setup_logging(client)
-    # client.update_bucket(bucket, retention_duration="10d")
+    client.update_bucket(bucket, retention_duration="10d")
 
     # Generate some random data, and send to influxdb server
     while 1:
@@ -72,11 +72,10 @@ def main():
         metric = InfluxMetric(
             measurement="py_metric1",
             fields={"data1": data, "data2": data2, "data3": data3},
-            time=datetime.now(UTC),
+            time=datetime.now(timezone.utc),
         )
 
         client.write_metric(metric)
-        # logger.info(f"Sent metric: {metric}")
         time.sleep(1)
 
 

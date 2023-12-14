@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 from fast_influxdb_client import (
     FastInfluxDBClient,
     InfluxMetric,
-    InfluxDBLoggingHandler,
     convert_to_seconds,
 )
 import logging

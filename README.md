@@ -43,11 +43,10 @@ client.create_bucket("logs")
 client.default_bucket = "logs"
 
 influx_handler = client.get_logging_handler()
+influx_handler.setLevel(logging.INFO)
 
 logger = logging.getLogger("fast_influxdb_client.fast_influxdb_client")
 
-logger.setLevel(logging.DEBUG)
-influx_handler.setLevel(logging.INFO)
 
 formatter = logging.Formatter(
     fmt="%(name)s - %(levelname)s - %(message)s"

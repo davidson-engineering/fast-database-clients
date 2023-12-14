@@ -20,9 +20,9 @@ from influxdb_client import InfluxDBClient
 from influxdb_client.client.exceptions import InfluxDBError
 from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client.rest import ApiException
-from logging_outcome_message import LoggingActionOutcome, SUCCESS, FAILED
 
 logger = logging.getLogger(__name__)
+
 
 class Error(Exception):
     def __init__(self, message):
@@ -33,6 +33,36 @@ class Error(Exception):
 class FastInfluxDBClientConfigError(Error):
     pass
 
+
+SUCCESS = "SUCCESS"
+FAILED = "FAILED"
+
+
+@dataclass
+class LoggingActionOutcome:
+    action: str
+    action_verbose: str = None
+    outcome: str = None
+
+    @property
+    def message(self):
+        return f"{self.action} -> {self.outcome}"
+
+    @property
+    def message_verbose(self):
+        return f"{self.action_verbose} -> {self.outcome}"
+
+    def __call__(self, action=None, outcome=None, action_verbose=None):
+        if action:
+            self.action = action
+        if outcome:
+            self.outcome = outcome
+        if action_verbose:
+            self.action_verbose = action_verbose
+
+        log_record = dict(msg=self.message, extra=dict(
+            details=self.message_verbose))
+        return log_record
 
 
 def convert_to_seconds(time_string):
@@ -52,14 +82,7 @@ def convert_to_seconds(time_string):
         raise ValueError("Invalid time format")
 
 
-class InfluxMetric:
-    """
-    A class to represent an InfluxDB metric
-    :param measurement: measurement name
-    :param fields: dictionary of fields
-    :param time: datetime object
-    :param tags: dictionary of tags
-    """
+class InfluxPacket:
 
     def __init__(
         self,
@@ -67,12 +90,14 @@ class InfluxMetric:
         fields=None,
         time: datetime = None,
         tags: dict = None,
-    ) -> None:
+    ):
+
         self.measurement = measurement
         self.fields = fields or {}
         self.tags = tags or {}
+
         if isinstance(time, datetime):
-            self.time = time
+            self.time = time.astimezone(UTC)
         else:
             self.time = datetime.now(UTC)
 
@@ -80,6 +105,54 @@ class InfluxMetric:
         fields = [f"{k}:{v}" for k, v in self.fields.items()]
         return f"{self.__class__.__name__}: {self.measurement}-{fields} at {self.time}"
 
+    def _asdict(self) -> dict:
+        return self.__dict__
+
+
+class InfluxMetric(InfluxPacket):
+    """
+    A class to represent an InfluxDB metric
+    :param measurement: measurement name
+    :param fields: dictionary of fields
+    :param time: datetime object
+    :param tags: dictionary of tags
+    """
+    pass
+
+
+class InfluxLog(InfluxPacket):
+    def __init__(self, record, msg, *args, measurement="logs", **kwargs):
+        super().__init__(measurement=measurement, *args, **kwargs)
+
+        try:
+            details = record.details
+        except AttributeError:
+            details = ""
+
+        self.fields = dict(
+            level=record.levelno,
+            msg=msg,
+            name=record.name,
+            path=record.pathname,
+            lineno=record.lineno,
+        )
+        self.tags = dict(
+            details=details,
+            level=record.levelname,
+            path=record.pathname,
+            lineno=record.lineno,
+            logger=record.name,
+            function=f"{record.funcName}()",
+            module=record.module,
+            process=f"{record.processName}:{record.process}",
+            thread=f"{record.threadName}:{record.thread}"
+        )
+        try:
+            self.time = datetime.fromtimestamp(record.created).astimezone(UTC)
+        except ValueError:
+            date_format = "%Y-%m-%dT%H:%M:%S%z"
+            self.time = datetime.strptime(
+                record.asctime, date_format).astimezone(UTC)
 
 
 class InfluxDBLoggingHandler(logging.Handler):
@@ -110,31 +183,16 @@ class InfluxDBLoggingHandler(logging.Handler):
 
     def emit(self, record):
         try:
-            msg = self.format(record)
-            fields = dict(
-                level=record.levelno,
-                msg=msg,
-                name=record.name,
-                path=record.pathname,
-                lineno=record.lineno,
-            )
-
-            try:
-                time = datetime.fromisoformat(record.asctime)
-            except ValueError:
-                date_format = "%Y-%m-%dT%H:%M:%S%z"
-                time = datetime.strptime(record.asctime, date_format)
-
-            influx_metric = InfluxMetric(
+            influx_log = InfluxLog(
                 measurement=self.measurement,
-                fields=fields,
-                time=time,
+                msg=self.format(record),
+                record=record,
             )
 
-            self._client.write_api().write(
-                self.log_bucket, self.org, influx_metric, write_precision="s"
-            )
-            
+            with self._client.write_api() as write_api:
+                write_api.write(
+                    bucket=self.log_bucket, org=self.org, record=influx_log, write_precision="ms"
+                )
 
         except Exception:
             self.handleError(record)
@@ -181,9 +239,11 @@ class FastInfluxDBClient(InfluxDBClient):
         """
         # check if config file exisit
         if not os.path.exists(config_file):
-            raise FastInfluxDBClientConfigError("Config file '{config_file}' does not exist")
- 
-        client = cls._from_config_file(config_file, debug, enable_gzip, **kwargs)
+            raise FastInfluxDBClientConfigError(
+                "Config file '{config_file}' does not exist")
+
+        client = cls._from_config_file(
+            config_file, debug, enable_gzip, **kwargs)
         client.default_org = client.org
         return client
 
@@ -214,12 +274,16 @@ class FastInfluxDBClient(InfluxDBClient):
             if self.default_org is not None:
                 org = self.default_org
             else:
-                raise FastInfluxDBClientConfigError("No org or default org specified")
+                raise FastInfluxDBClientConfigError(
+                    "No org or default org specified")
 
         if isinstance(metric, dict):
             metric = InfluxMetric(**metric)
 
-        log_action_outcome = LoggingActionOutcome(action=f"Sending metric:{metric} to bucket:'{bucket}' on influxdb at {self.url}")
+        log_action_outcome = LoggingActionOutcome(
+            action=f"Sending metric to influxdb",
+            action_verbose=f"Sending metric:{metric.measurement} to bucket:'{bucket}' on influxdb at {self.url}"
+        )
 
         try:
             # Check if fields contain invalid types before attempting to write
@@ -227,10 +291,9 @@ class FastInfluxDBClient(InfluxDBClient):
                 if not isinstance(value, (str, int, float, bool, datetime)):
                     raise ValueError(f"Invalid field type: {type(value)}")
 
-            self.write_api(write_options=write_option).write(bucket=bucket, org=org, record=metric.__dict__, write_precision="s")
-            logger.info(f"Sent metric to bucket:'{bucket}' on influxdb at {self.url}")
-            logger.debug(log_action_outcome(outcome=SUCCESS))
-
+            self.write_api(write_options=write_option).write(
+                bucket=bucket, org=org, record=metric.__dict__, write_precision="ms")
+            logger.info(**log_action_outcome(outcome=SUCCESS))
 
         except InfluxDBError as e:
             logger.error(log_action_outcome(outcome=FAILED))
@@ -245,21 +308,23 @@ class FastInfluxDBClient(InfluxDBClient):
         """
         if time is None:
             time = datetime.now(UTC)
-        influx_metric = InfluxMetric(measurement=measurement, time=time, fields=fields)
+        influx_metric = InfluxMetric(
+            measurement=measurement, time=time, fields=fields)
         # Saving data to InfluxDB
         self.write_metric(influx_metric)
 
     def __repr__(self):
         return f"FastInfluxDBClient(url={self.url}, org={self.default_org}, default_bucket={self.default_bucket})"
 
-    def get_logging_handler(self, datefmt="%Y-%m-%dT%H:%M:%S%z"):
+    def get_logging_handler(self, datefmt="%Y%m%dT%H:%M:%S%z"):
         """Create a logging handler to send logs to InfluxDB
         :param datefmt: date format string
         :return: logging handler
         """
         logging_handler = InfluxDBLoggingHandler(self)
         logging_formatter = logging.Formatter(
-            fmt="%(asctime)s %(levelname)s %(message)s", datefmt=datefmt
+            # fmt="%(asctime)s %(levelname)s %(message)s"
+            fmt="%(levelname)s %(message)s", datefmt=datefmt
         )
         logging_handler.setFormatter(logging_formatter)
         return logging_handler
@@ -306,7 +371,7 @@ class FastInfluxDBClient(InfluxDBClient):
         :return: list of buckets
         """
         return self.buckets_api().find_buckets()
-    
+
     def enable_verbose_logging_to_console(self):
         for _, logger in self.conf.loggers.items():
             logger.setLevel(logging.DEBUG)

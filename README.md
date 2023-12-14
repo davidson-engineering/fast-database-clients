@@ -46,12 +46,6 @@ influx_handler = client.get_logging_handler()
 influx_handler.setLevel(logging.INFO)
 
 logger = logging.getLogger("fast_influxdb_client.fast_influxdb_client")
-
-formatter = logging.Formatter(
-    fmt="%(name)s - %(levelname)s - %(message)s"
-)
-influx_handler.setFormatter(formatter)
-
 logger.addHandler(influx_handler)
 
 logger.info("This log gets sent to InfluxDB")

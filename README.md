@@ -47,7 +47,6 @@ influx_handler.setLevel(logging.INFO)
 
 logger = logging.getLogger("fast_influxdb_client.fast_influxdb_client")
 
-
 formatter = logging.Formatter(
     fmt="%(name)s - %(levelname)s - %(message)s"
 )

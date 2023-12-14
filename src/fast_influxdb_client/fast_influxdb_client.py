@@ -8,8 +8,7 @@
 
 # ---------------------------------------------------------------------------
 from dataclasses import dataclass
-from datetime import UTC
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Union
 import re
 import logging
@@ -109,9 +108,9 @@ class InfluxPacket:
         self.tags = tags or {}
 
         if isinstance(time, datetime):
-            self.time = time.astimezone(UTC)
+            self.time = time.astimezone(timezone.utc)
         else:
-            self.time = datetime.now(UTC)
+            self.time = datetime.now(timezone.utc)
 
     def __repr__(self) -> str:
         fields = [f"{k}:{v}" for k, v in self.fields.items()]
@@ -161,10 +160,12 @@ class InfluxLog(InfluxPacket):
             thread=f"{record.threadName}:{record.thread}",
         )
         try:
-            self.time = datetime.fromtimestamp(record.created).astimezone(UTC)
+            self.time = datetime.fromtimestamp(record.created).astimezone(timezone.utc)
         except ValueError:
             date_format = "%Y-%m-%dT%H:%M:%S%z"
-            self.time = datetime.strptime(record.asctime, date_format).astimezone(UTC)
+            self.time = datetime.strptime(record.asctime, date_format).astimezone(
+                timezone.utc
+            )
 
 
 class InfluxLoggingHandler(logging.Handler):
@@ -329,7 +330,7 @@ class FastInfluxDBClient(InfluxDBClient):
         :return: None
         """
         if time is None:
-            time = datetime.now(UTC)
+            time = datetime.now(timezone.utc)
         influx_metric = InfluxMetric(measurement=measurement, time=time, fields=fields)
         # Saving data to InfluxDB
         self.write_metric(influx_metric)

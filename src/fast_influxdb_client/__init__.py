@@ -1,4 +1,4 @@
-__version__ = "1.0.3"
+__version__ = "1.0.4"
 
 from fast_influxdb_client.fast_influxdb_client import FastInfluxDBClient
 from fast_influxdb_client.fast_influxdb_client import InfluxMetric

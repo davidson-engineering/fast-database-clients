@@ -5,7 +5,6 @@ from fast_influxdb_client import (
     InfluxMetric,
     convert_to_seconds,
 )
-import logging
 from unittest.mock import MagicMock
 
 

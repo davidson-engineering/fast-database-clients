@@ -40,7 +40,7 @@ import re
 import logging
 import os
 import sys
-from enum import Enum
+from enum import StrEnum
 
 from influxdb_client import InfluxDBClient
 from influxdb_client.client.exceptions import InfluxDBError
@@ -74,9 +74,12 @@ class FastInfluxDBClientConfigError(ErrorException):
 
 
 # Enum type for success and failure of action->outcome messaging pair
-class ActionOutcome(Enum):
+class ActionOutcome(StrEnum):
     SUCCESS = "success"
     FAILED = "failed"
+
+    def __str__(self):
+        return self.value.upper()
 
 
 @dataclass
@@ -316,7 +319,6 @@ class InfluxLoggingHandler(logging.Handler):
     def __init__(
         self,
         client,
-        *args,
         name="influxdb_logger",
         bucket=None,
         org=None,
@@ -341,7 +343,7 @@ class InfluxLoggingHandler(logging.Handler):
             args: Additional arguments.
             kwargs: Additional keyword arguments.
         """
-        super().__init__(*args, **kwargs)
+        super().__init__(**kwargs)
         self.set_name(name)
         self._client = client
         self.measurement = measurement
@@ -446,7 +448,6 @@ class FastInfluxDBClient(InfluxDBClient):
     def __init__(
         self,
         url: str,
-        *args,
         token: str = None,
         default_bucket: str = None,
         debug=None,
@@ -476,7 +477,7 @@ class FastInfluxDBClient(InfluxDBClient):
         self.default_write_precision = default_write_precision
 
         super().__init__(
-            url, token, debug, timeout, enable_gzip, org, default_tags, *args, **kwargs
+            url, token, debug, timeout, enable_gzip, org, default_tags, **kwargs
         )
         if default_bucket is not None:
             self.create_bucket(default_bucket)
@@ -490,7 +491,6 @@ class FastInfluxDBClient(InfluxDBClient):
     def __init__(
         self,
         url: str,
-        *args,
         token: str = None,
         default_bucket: str = None,
         debug=None,
@@ -519,7 +519,7 @@ class FastInfluxDBClient(InfluxDBClient):
         self.default_write_precision = default_write_precision
 
         super().__init__(
-            url, token, debug, timeout, enable_gzip, org, default_tags, *args, **kwargs
+            url, token, debug, timeout, enable_gzip, org, default_tags, **kwargs
         )
         if default_bucket is not None:
             self.create_bucket(default_bucket)
@@ -653,7 +653,7 @@ class FastInfluxDBClient(InfluxDBClient):
         :param datefmt: The date format string.
         :return: The logging handler.
         """
-        return InfluxLoggingHandler(self, fmt=messagefmt, datefmt=datefmt)
+        return InfluxLoggingHandler(self, messagefmt=messagefmt, datefmt=datefmt)
 
     def create_bucket(self, bucket_name: str, retention_duration: str = "30d"):
         """

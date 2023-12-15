@@ -59,7 +59,7 @@ def main():
     client = FastInfluxDBClient.from_config_file(config_file=config_file)
     print(f"{client=}")
     client.default_bucket = bucket
-    # client.create_bucket(bucket)
+    client.create_bucket(bucket)
     logger = setup_logging(client)
     client.update_bucket(bucket, retention_duration="10d")
 

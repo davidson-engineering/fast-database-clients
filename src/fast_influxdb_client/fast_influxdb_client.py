@@ -40,7 +40,7 @@ import re
 import logging
 import os
 import sys
-from enum import StrEnum
+from enum import Enum
 
 from influxdb_client import InfluxDBClient
 from influxdb_client.client.exceptions import InfluxDBError
@@ -74,7 +74,7 @@ class FastInfluxDBClientConfigError(ErrorException):
 
 
 # Enum type for success and failure of action->outcome messaging pair
-class ActionOutcome(StrEnum):
+class ActionOutcome(str, Enum):
     SUCCESS = "success"
     FAILED = "failed"
 

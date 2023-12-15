@@ -274,6 +274,7 @@ class InfluxLog(InfluxMetric):
             module=record.module,
             process=f"{record.processName}:{record.process}",
             thread=f"{record.threadName}:{record.thread}",
+            record_time=f"{record.asctime},{int(record.msecs)}",
         )
         self.time = datetime.fromtimestamp(record.created).astimezone(timezone.utc)
 
@@ -324,8 +325,8 @@ class InfluxLoggingHandler(logging.Handler):
         org=None,
         measurement="logs",
         time_precision=DEFAULT_WRITE_PRECISION_LOGS,
-        messagefmt="%(levelname)s %(message)s",
-        datefmt="%Y%m%dT%H:%M:%S%z",
+        messagefmt="%(created)s %(levelname)s %(message)s",
+        datefmt="%Y%m%d/%H:%M:%S%z",
         **kwargs,
     ):
         """
@@ -379,40 +380,6 @@ class InfluxLoggingHandler(logging.Handler):
 
         except Exception:
             self.handleError(record)
-
-
-class FastInfluxDBClient(InfluxDBClient):
-    """
-    A class for sending data to an InfluxDB server using the InfluxDB client API.
-
-    Args:
-        url (str): The URL of the InfluxDB server.
-        token (str, optional): The authentication token. Defaults to None.
-        default_bucket (str, optional): The default bucket name. Defaults to None.
-        debug (bool, optional): Enable debug logging. Defaults to None.
-        timeout (int or tuple[int, int], optional): The timeout value in milliseconds. Defaults to 10_000.
-        enable_gzip (bool, optional): Enable gzip compression. Defaults to False.
-        org (str, optional): The organization name. Defaults to None.
-        default_tags (dict, optional): The default tags to include with each write. Defaults to None.
-        default_write_precision (str, optional): The default write precision. Defaults to DEFAULT_WRITE_PRECISION_DATA.
-        kwargs: Additional keyword arguments to pass to the base class constructor.
-
-    Attributes:
-        default_bucket (str): The default bucket name.
-        default_write_precision (str): The default write precision.
-
-    Methods:
-        from_config_file: Create a new FastInfluxDBClient object from a config file.
-        write_metric: Write a metric to InfluxDB server.
-        write_data: Package some data into an InfluxMetric object and send it to InfluxDB.
-        get_logging_handler: Create a logging handler to send logs to InfluxDB.
-        create_bucket: Create a bucket.
-        update_bucket: Update a bucket.
-        list_buckets: List all buckets.
-        enable_verbose_logging_to_console: Enable verbose logging to console.
-    """
-
-    # Rest of the code...
 
 
 class FastInfluxDBClient(InfluxDBClient):
@@ -645,7 +612,9 @@ class FastInfluxDBClient(InfluxDBClient):
         return f"FastInfluxDBClient(url={self.url}, org={self.default_org}, default_bucket={self.default_bucket})"
 
     def get_logging_handler(
-        self, messagefmt="%(levelname)s %(message)s", datefmt="%Y%m%dT%H:%M:%S%z"
+        self,
+        messagefmt="%(levelname)s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     ):
         """
         Create a logging handler to send logs to InfluxDB.

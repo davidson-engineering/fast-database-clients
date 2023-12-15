@@ -3,10 +3,8 @@
 # ----------------------------------------------------------------------------
 # Created By  : Matthew Davidson
 # Created Date: 2023-11-19
-# version ='1.0'
 # ---------------------------------------------------------------------------
 """Demonstration of how to use the FastInfluxDBClient class to send metrics to InfluxDB server"""
-
 # ---------------------------------------------------------------------------
 
 from fast_influxdb_client import FastInfluxDBClient, InfluxMetric
@@ -35,14 +33,14 @@ def setup_logging(client):
 
     # setup logging format
     formatter = logging.Formatter(
-        fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y%m%d %H:%M:%S",
+        fmt="%(asctime)s,%(msecs)03d - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
 
     # setup logging to console
     ch.setFormatter(formatter)
     fh.setFormatter(formatter)
-    influx_handler.setFormatter(formatter)
+    # influx_handler.setFormatter(formatter)
 
     # add handlers to logger
     logger.addHandler(ch)
@@ -53,6 +51,14 @@ def setup_logging(client):
 
 
 def main():
+    """
+    This is the main function that performs the following tasks:
+    1. Creates a new client for connecting to InfluxDB.
+    2. Sets the default bucket and creates the bucket if it doesn't exist.
+    3. Sets up logging for the client.
+    4. Updates the retention duration for the bucket.
+    5. Generates random data and sends it to the InfluxDB server.
+    """
     bucket = "metrics2"
     config_file = "config.toml"
     # Create new client
@@ -76,7 +82,7 @@ def main():
         )
 
         client.write_metric(metric)
-        time.sleep(1)
+        time.sleep(1 + random.random())
 
 
 if __name__ == "__main__":

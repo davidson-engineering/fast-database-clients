@@ -494,7 +494,7 @@ class FastInfluxDBClient(InfluxDBClient):
         token: str = None,
         default_bucket: str = None,
         debug=None,
-        timeout: Union[int, tuple[int, int]] = 10_000,
+        timeout: Union[int, Tuple[int, int]] = 10_000,
         enable_gzip: bool = False,
         org: str = None,
         default_tags: dict = None,

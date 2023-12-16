@@ -325,8 +325,8 @@ class InfluxLoggingHandler(logging.Handler):
         org=None,
         measurement="logs",
         time_precision=DEFAULT_WRITE_PRECISION_LOGS,
-        messagefmt="%(created)s %(levelname)s %(message)s",
-        datefmt="%Y%m%d/%H:%M:%S%z",
+        messagefmt="%(asctime)s,%(msecs)03d - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",  # ISO8601 format
         **kwargs,
     ):
         """
@@ -382,6 +382,24 @@ class InfluxLoggingHandler(logging.Handler):
             self.handleError(record)
 
 
+class BatchingCallback(object):
+    """
+    This class defines the callbacks for batched writes in the Fast InfluxDB Client.
+    It provides methods for handling success, error, and retry scenarios.
+    """
+
+    def success(self, conf: (str, str, str), data: str):
+        logger.debug(f"Written batch: {conf}, data: {data}")
+
+    def error(self, conf: (str, str, str), data: str, exception: InfluxDBError):
+        logger.error(f"Cannot write batch: {conf}, data: {data} due: {exception}")
+
+    def retry(self, conf: (str, str, str), data: str, exception: InfluxDBError):
+        logger.warning(
+            f"Retryable error occurs for batch: {conf}, data: {data} retry: {exception}"
+        )
+
+
 class FastInfluxDBClient(InfluxDBClient):
     """
     A class for sending data to an InfluxDB server using the InfluxDB client API.
@@ -428,49 +446,6 @@ class FastInfluxDBClient(InfluxDBClient):
         """
         Initialize a FastInfluxDBClient object.
 
-        Args:
-            url (str): The URL of the InfluxDB server.
-            token (str, optional): The authentication token for the InfluxDB server. Defaults to None.
-            default_bucket (str, optional): The default bucket to write data to. Defaults to None.
-            debug (bool, optional): Enable debug logging. Defaults to None.
-            timeout (int or tuple[int, int], optional): The timeout for requests to the InfluxDB server. Defaults to 10_000.
-            enable_gzip (bool, optional): Enable gzip compression for requests. Defaults to False.
-            org (str, optional): The organization name for the InfluxDB server. Defaults to None.
-            default_tags (dict, optional): The default tags to include with each metric. Defaults to None.
-            default_write_precision (str, optional): The default write precision for metrics. Defaults to DEFAULT_WRITE_PRECISION_DATA.
-            kwargs: Additional keyword arguments.
-        """
-        self.default_bucket = default_bucket
-        self.default_write_precision = default_write_precision
-
-        super().__init__(
-            url, token, debug, timeout, enable_gzip, org, default_tags, **kwargs
-        )
-        if default_bucket is not None:
-            self.create_bucket(default_bucket)
-
-
-class FastInfluxDBClient(InfluxDBClient):
-    """
-    A class for sending data to an InfluxDB server using the InfluxDB client API.
-    """
-
-    def __init__(
-        self,
-        url: str,
-        token: str = None,
-        default_bucket: str = None,
-        debug=None,
-        timeout: Union[int, Tuple[int, int]] = 10_000,
-        enable_gzip: bool = False,
-        org: str = None,
-        default_tags: dict = None,
-        default_write_precision=DEFAULT_WRITE_PRECISION_DATA,
-        **kwargs,
-    ):
-        """
-        Initialize a FastInfluxDBClient object.
-
         :param url: The URL of the InfluxDB server.
         :param token: The authentication token for the InfluxDB server.
         :param default_bucket: The default bucket to write data to.
@@ -494,7 +469,6 @@ class FastInfluxDBClient(InfluxDBClient):
     @classmethod
     def from_config_file(
         cls,
-        *args,
         config_file: str = "config.ini",
         debug: None = None,
         enable_gzip: bool = False,
@@ -515,7 +489,7 @@ class FastInfluxDBClient(InfluxDBClient):
                 f"Config file '{config_file}' does not exist"
             )
 
-        client = cls._from_config_file(config_file, debug, enable_gzip, *args, **kwargs)
+        client = cls._from_config_file(config_file, debug, enable_gzip, **kwargs)
         client.default_org = client.org
         return client
 
@@ -575,7 +549,8 @@ class FastInfluxDBClient(InfluxDBClient):
                     record=metric,
                     write_precision=write_precision,
                 )
-                logger.info(**log_action_outcome(outcome=ActionOutcome.SUCCESS))
+
+            logger.info(**log_action_outcome(outcome=ActionOutcome.SUCCESS))
 
         except InfluxDBError as e:
             logger.error(**log_action_outcome(outcome=ActionOutcome.FAILED))
@@ -607,6 +582,29 @@ class FastInfluxDBClient(InfluxDBClient):
         )
         # Saving data to InfluxDB
         self.write_metric(influx_metric)
+
+    def query_table(self, query: str):
+        """
+        In development
+
+        """
+        tables = self.query_api().query(query)
+
+        for table in tables:
+            print(table)
+            for row in table.records:
+                print(row.values)
+
+    def query_data(self, query: str, org: str = None):
+        """
+        Query data from InfluxDB.
+
+        :param query: The query string.
+        :param org: The organization name.
+        :return: The query result.
+        """
+        org = org or self.org
+        return self.query_api().query(org=org, query=query)
 
     def __repr__(self):
         return f"FastInfluxDBClient(url={self.url}, org={self.default_org}, default_bucket={self.default_bucket})"

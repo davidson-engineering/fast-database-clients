@@ -33,14 +33,14 @@ def setup_logging(client):
 
     # setup logging format
     formatter = logging.Formatter(
-        fmt="%(asctime)s,%(msecs)03d - %(name)s - %(levelname)s - %(message)s",
+        fmt="%(asctime)s,%(msecs)03d - %(levelname)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
     # setup logging to console
     ch.setFormatter(formatter)
     fh.setFormatter(formatter)
-    # influx_handler.setFormatter(formatter)
+    influx_handler.setFormatter(formatter)
 
     # add handlers to logger
     logger.addHandler(ch)
@@ -62,27 +62,29 @@ def main():
     bucket = "metrics2"
     config_file = "config.toml"
     # Create new client
-    client = FastInfluxDBClient.from_config_file(config_file=config_file)
-    print(f"{client=}")
-    client.default_bucket = bucket
-    client.create_bucket(bucket)
-    logger = setup_logging(client)
-    client.update_bucket(bucket, retention_duration="10d")
+    with FastInfluxDBClient.from_config_file(config_file=config_file) as client:
+        print(f"{client=}")
+        client.default_bucket = bucket
+        client.create_bucket(bucket)
+        logger = setup_logging(client)
+        client.update_bucket(bucket, retention_duration="10d")
 
-    # Generate some random data, and send to influxdb server
-    while 1:
-        data = random.random()
-        data2 = random.randint(0, 100)
-        data3 = random.choice([True, False])
+        # client.query_table(f'from(bucket:"{bucket}") |> range(start: -1h)')
 
-        metric = InfluxMetric(
-            measurement="py_metric1",
-            fields={"data1": data, "data2": data2, "data3": data3},
-            time=datetime.now(timezone.utc),
-        )
+        # Generate some random data, and send to influxdb server
+        while 1:
+            data = random.random()
+            data2 = random.randint(0, 100)
+            data3 = random.choice([True, False])
 
-        client.write_metric(metric)
-        time.sleep(1 + random.random())
+            metric = InfluxMetric(
+                measurement="py_metric1",
+                fields={"data1": data, "data2": data2, "data3": data3},
+                time=datetime.now(timezone.utc),
+            )
+
+            client.write_metric(metric)
+            time.sleep(1 + random.random())
 
 
 if __name__ == "__main__":

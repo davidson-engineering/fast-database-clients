@@ -5,7 +5,7 @@
 *.code-workspace
 .vscode/**
 .pytest_cache
-build/**
+build/
 config.toml
 *.log
 .VSCodeCounter/

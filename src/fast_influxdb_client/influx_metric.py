@@ -65,8 +65,8 @@ class InfluxMetric(Sequence):
                 raise TypeError(f"Expected {expected_type} for field '{field_name}', but got {type(value)}")
 
     def _convert_to_expected_type(self, value, expected_type):
-        if expected_type is datetime and isinstance(value, int):
-            return datetime.utcfromtimestamp(value) # Assumes all timestamps are UTC
+        if expected_type is datetime and isinstance(value, (int, float)):
+            return datetime.datetime.fromtimestamp(int(value), datetime.UTC) # Assumes all timestamps are UTC
         elif expected_type is int and isinstance(value, (float, str)):
             return int(value)
         elif expected_type is float and isinstance(value, (int, str)):

@@ -51,7 +51,7 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client.rest import ApiException
 from influxdb_client.domain.write_precision import WritePrecision
 
-from fast_influxdb_client.influx_metric import InfluxMetric, dict_to_influx_metric, separate_influx_metrics_by_bucket
+from fast_influxdb_client.influx_metric import InfluxMetric, dict_to_influx_metric
 from fast_influxdb_client.influx_log import InfluxLoggingHandler
 
 DEFAULT_WRITE_PRECISION_DATA = WritePrecision.S

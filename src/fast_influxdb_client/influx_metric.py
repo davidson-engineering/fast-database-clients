@@ -8,7 +8,7 @@
 
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
-from typing import Any, Sequence
+from typing import Any, Sequence, Union
 
 
 @dataclass
@@ -55,4 +55,33 @@ class InfluxMetric(Sequence):
                 ]
             ]
         )
-        return f"{self.measurement}: {self.fields} @ {self.time}" + extra_info
+        return f"{self.measurement}: {self.fields} @ {self.time}{extra_info}"
+
+    def __post_init__(self):
+        type_mapping = {'measurement': str, 'fields': dict, 'time': datetime, 'bucket': str, 'tags': dict, 'priority': int}
+        for field_name, expected_type in type_mapping.items():
+            value = getattr(self, field_name)
+            if value is not None and not isinstance(value, expected_type):
+                raise TypeError(f"Expected {expected_type} for field '{field_name}', but got {type(value)}")
+
+    def _convert_to_expected_type(self, value, expected_type):
+        if expected_type is datetime and isinstance(value, int):
+            return datetime.utcfromtimestamp(value) # Assumes all timestamps are UTC
+        elif expected_type is int and isinstance(value, (float, str)):
+            return int(value)
+        elif expected_type is float and isinstance(value, (int, str)):
+            return float(value)
+        return value
+
+def dict_to_influx_metric(data: dict, defaults: dict = None) -> InfluxMetric:
+    if isinstance(data, InfluxMetric):
+        return data
+
+    filtered_data = {key: value for key, value in data.items() if value is not None}
+
+    # Apply default values if provided
+    if defaults:
+        for key, value in defaults.items():
+            filtered_data.setdefault(key, value)
+
+    return InfluxMetric(**filtered_data)

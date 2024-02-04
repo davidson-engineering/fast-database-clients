@@ -34,20 +34,24 @@ Functions:
 # ---------------------------------------------------------------------------
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Union, Tuple
+from typing import Iterable, Union, Tuple
 import re
 import logging
 import os
 import sys
 from enum import Enum
+from itertools import groupby
+from operator import attrgetter
+from typing import List
 
-from influxdb_client import InfluxDBClient
+
+from influxdb_client import InfluxDBClient, Point
 from influxdb_client.client.exceptions import InfluxDBError
 from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client.rest import ApiException
 from influxdb_client.domain.write_precision import WritePrecision
 
-from fast_influxdb_client.influx_metric import InfluxMetric
+from fast_influxdb_client.influx_metric import InfluxMetric, dict_to_influx_metric, separate_influx_metrics_by_bucket
 from fast_influxdb_client.influx_log import InfluxLoggingHandler
 
 DEFAULT_WRITE_PRECISION_DATA = WritePrecision.S
@@ -55,6 +59,11 @@ DEFAULT_WRITE_PRECISION_DATA = WritePrecision.S
 
 logger = logging.getLogger(__name__)
 
+def group_by_key(objects: List[dict], key) -> dict:
+    sorted_objects = sorted(objects, key=attrgetter(key))
+    grouped_objects = {key: list(group) for key, group in groupby(sorted_objects, key=attrgetter(key))}
+
+    return grouped_objects
 
 class ErrorException(Exception):
     """
@@ -318,7 +327,14 @@ class FastInfluxDBClient(InfluxDBClient):
 
     def write_metric(
         self,
-        metric: Union[InfluxMetric, dict],
+        metrics: Union[
+            InfluxMetric,
+            dict,
+            dataclass,
+            Iterable[InfluxMetric],
+            Iterable[dict],
+            Iterable[dataclass],
+        ],
         write_option=SYNCHRONOUS,
         bucket: str = None,
         org: str = None,
@@ -334,13 +350,6 @@ class FastInfluxDBClient(InfluxDBClient):
         :param write_precision: The write precision for the metric.
         :return: None.
         """
-        if bucket is None:
-            if self.default_bucket is not None:
-                bucket = self.default_bucket
-            else:
-                raise FastInfluxDBClientConfigError(
-                    "No bucket or default bucket specified"
-                )
 
         if org is None:
             if self.org is not None:
@@ -351,33 +360,38 @@ class FastInfluxDBClient(InfluxDBClient):
         if write_precision is None:
             write_precision = self.default_write_precision
 
-        if isinstance(metric, dict):
-            metric = InfluxMetric(**metric)
+        if isinstance(metrics, (InfluxMetric, dict)):
+            metrics = [metrics]
+
+        if self.default_bucket is None:
+            logging.warning("No default bucket specified. Metrics without a specified bucket will not be written.")
+
+        defaults = {"bucket": self.default_bucket}
+        number_of_metrics = len(metrics)
+        influx_metrics = [dict_to_influx_metric(data, defaults=defaults) for data in metrics]
+
+        influx_metrics_by_bucket = group_by_key(influx_metrics, key="bucket")
 
         log_action_outcome = ActionOutcomeMessage(
-            action="Sending metric to influxdb",
-            action_verbose=f"Sending metric:{metric.measurement} to bucket:'{bucket}' on influxdb at {self.url}",
+            action=f"Sending {number_of_metrics} metrics to influxdb",
+            action_verbose=f"Sending {number_of_metrics} metrics to influxdb server at {self.url}",
         )
 
-        try:
-            # Check if fields contain invalid types before attempting to write
-            for value in metric.fields.values():
-                if not isinstance(value, (str, int, float, bool, datetime)):
-                    raise ValueError(f"Invalid field type: {type(value)}")
-
-            with self.write_api(write_options=write_option) as write_api:
-                write_api.write(
-                    bucket=bucket,
-                    org=org,
-                    record=metric,
-                    write_precision=write_precision,
-                )
-
-            logger.info(**log_action_outcome(outcome=ActionOutcome.SUCCESS))
-
-        except InfluxDBError as e:
-            logger.error(**log_action_outcome(outcome=ActionOutcome.FAILED))
-            raise ErrorException(f"Failed to write metric: {e}") from e
+        with self.write_api(write_options=write_option) as write_api:
+            for bucket, metrics in influx_metrics_by_bucket.items():
+                outcome = ActionOutcome.SUCCESS
+                try:
+                    write_api.write(
+                        bucket=bucket,
+                        org=org,
+                        record=metrics,
+                        write_precision=write_precision,
+                    )
+                except InfluxDBError as e:
+                    outcome = ActionOutcome.FAILED
+                    raise ErrorException(f"Failed to write metrics: {e}") from e
+                finally:
+                    logger.info(**log_action_outcome(outcome=outcome))
 
     def write_data(
         self,

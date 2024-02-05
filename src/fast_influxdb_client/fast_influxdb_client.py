@@ -80,7 +80,8 @@ def dict_to_point(data: dict, write_precision=DEFAULT_WRITE_PRECISION_DATA) -> P
         point.field(field_name, field_value)
 
     if "tags" in data:
-        point.tag(data.pop("tags"))
+        for tag_name, tag_value in data.pop("tags").items():
+            point.tag(tag_name, tag_value)
 
     return point
 

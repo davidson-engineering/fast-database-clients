@@ -72,7 +72,9 @@ def group_by_key(objects: List[dict], key) -> dict:
 def dict_to_point(data: dict, write_precision=DEFAULT_WRITE_PRECISION_DATA) -> Point:
     point = Point(data.pop("measurement"))
     point.time(data.pop("time"), write_precision)
-    point.fields(data.pop("fields"))
+    fields = data.pop("fields")
+    for k,v in fields.items():
+        point.field(k,v)
     point.tag(data.pop("tags"))
     return point
 

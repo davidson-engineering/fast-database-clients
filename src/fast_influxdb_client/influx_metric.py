@@ -17,7 +17,7 @@ class InfluxMetric(Sequence):
     fields: dict
     time: datetime = field(default_factory=datetime.utcnow)
     bucket: str = None
-    tags: dict = None
+    tags: dict = field(default_factory=dict)
     priority: int = 0
 
     def __iter__(self) -> Any:

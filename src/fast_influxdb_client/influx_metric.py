@@ -7,36 +7,35 @@
 # ---------------------------------------------------------------------------
 
 from dataclasses import dataclass, field, asdict
+from typing import Any, Sequence
+import time
 from datetime import datetime
-from typing import Any, Sequence, Union
 
 
 @dataclass
 class InfluxMetric(Sequence):
     measurement: str
     fields: dict
-    time: datetime = field(default_factory=datetime.utcnow)
-    bucket: str = None
+    time: float = field(default_factory=time.time)
     tags: dict = field(default_factory=dict)
-    priority: int = 0
 
     def __iter__(self) -> Any:
         yield from (
             self.measurement,
             self.time,
             self.fields,
-            self.bucket,
             self.tags,
-            self.priority,
         )
 
     def __getitem__(self, index) -> Any:
         if index == 0:
             return self.measurement
         elif index == 1:
-            return self.time
-        elif index == 2:
             return self.fields
+        elif index == 2:
+            return self.time
+        elif index == 3:
+            return self.tags
         else:
             raise IndexError("InfluxMetric index out of range")
 
@@ -44,34 +43,37 @@ class InfluxMetric(Sequence):
         return len(asdict(self))
 
     def __repr__(self) -> str:
-        process_extra = lambda x: f"{x[0]}: {x[1]}" if x[1] else ""
-        extra_info = ", ".join(
-            [
-                process_extra(x)
-                for x in [
-                    ("tags", self.tags),
-                    ("bucket", self.bucket),
-                    ("priority", self.priority),
-                ]
-            ]
-        )
-        return f"{self.measurement}: {self.fields} @ {self.time}{extra_info}"
+        return f"{self.measurement}: {self.fields} @ {self.time} | {self.tags}"
 
     def __post_init__(self):
-        type_mapping = {'measurement': str, 'fields': dict, 'time': datetime, 'bucket': str, 'tags': dict, 'priority': int}
+        type_mapping = {
+            "measurement": str,
+            "fields": dict,
+            "time": float,
+            "tags": dict,
+        }
         for field_name, expected_type in type_mapping.items():
             value = getattr(self, field_name)
-            if value is not None and not isinstance(value, expected_type):
-                raise TypeError(f"Expected {expected_type} for field '{field_name}', but got {type(value)}")
+            try:
+                if value is not None and not isinstance(value, expected_type):
+                    raise TypeError(
+                        f"Expected {expected_type} for field '{field_name}', but got {type(value)}"
+                    )
+            except TypeError:
+                converted_value = self._convert_to_expected_type(value, expected_type)
+                setattr(self, field_name, converted_value)
 
     def _convert_to_expected_type(self, value, expected_type):
-        if expected_type is datetime and isinstance(value, (int, float)):
-            return datetime.datetime.fromtimestamp(int(value), datetime.UTC) # Assumes all timestamps are UTC
-        elif expected_type is int and isinstance(value, (float, str)):
+        if expected_type is int and isinstance(value, (float, str)):
             return int(value)
         elif expected_type is float and isinstance(value, (int, str)):
             return float(value)
+        elif expected_type is str and isinstance(value, (int, float)):
+            return str(value)
+        elif expected_type is float and isinstance(value, datetime):
+            return value.timestamp()
         return value
+
 
 def dict_to_influx_metric(data: dict, defaults: dict = None) -> InfluxMetric:
 
@@ -83,6 +85,6 @@ def dict_to_influx_metric(data: dict, defaults: dict = None) -> InfluxMetric:
     # Apply default values if provided
     if defaults:
         for key, value in defaults.items():
-            data.setdefault(key, value)
+            filtered_data.setdefault(key, value)
 
     return InfluxMetric(**filtered_data)

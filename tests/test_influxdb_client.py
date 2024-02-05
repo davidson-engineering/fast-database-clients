@@ -39,7 +39,7 @@ def test_influx_metric_creation():
 
     assert metric.measurement == measurement
     assert metric.fields == fields
-    assert metric.time == time
+    assert metric.time == time.timestamp()
     assert metric.tags == tags
 
 

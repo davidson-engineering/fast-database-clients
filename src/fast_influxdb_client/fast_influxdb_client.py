@@ -45,7 +45,7 @@ from operator import attrgetter
 from typing import List
 
 
-from influxdb_client import InfluxDBClient, Point
+from influxdb_client import InfluxDBClient
 from influxdb_client.client.exceptions import InfluxDBError
 from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client.rest import ApiException
@@ -59,11 +59,14 @@ DEFAULT_WRITE_PRECISION_DATA = WritePrecision.S
 
 logger = logging.getLogger(__name__)
 
+
 def group_by_key(objects: List[dict], key) -> dict:
     sorted_objects = sorted(objects, key=attrgetter(key))
-    grouped_objects = {key: list(group) for key, group in groupby(sorted_objects, key=attrgetter(key))}
-
+    grouped_objects = {
+        key: list(group) for key, group in groupby(sorted_objects, key=attrgetter(key))
+    }
     return grouped_objects
+
 
 class ErrorException(Exception):
     """
@@ -338,7 +341,7 @@ class FastInfluxDBClient(InfluxDBClient):
         write_option=SYNCHRONOUS,
         bucket: str = None,
         org: str = None,
-        write_precision=None,
+        write_precision: WritePrecision = None,
     ) -> None:
         """
         Write a metric to the InfluxDB server.
@@ -363,14 +366,15 @@ class FastInfluxDBClient(InfluxDBClient):
         if isinstance(metrics, (InfluxMetric, dict)):
             metrics = [metrics]
 
-        if self.default_bucket is None:
-            logging.warning("No default bucket specified. Metrics without a specified bucket will not be written.")
+        if bucket is None:
+            if self.default_bucket is None:
+                raise FastInfluxDBClientConfigError(
+                    "No bucket specified, and no default bucket is specified."
+                )
+            bucket = self.default_bucket
 
-        defaults = {"bucket": self.default_bucket}
         number_of_metrics = len(metrics)
-        influx_metrics = [dict_to_influx_metric(data, defaults=defaults) for data in metrics]
-
-        influx_metrics_by_bucket = group_by_key(influx_metrics, key="bucket")
+        metrics = [dict_to_influx_metric(metric) for metric in metrics]
 
         log_action_outcome = ActionOutcomeMessage(
             action=f"Sending {number_of_metrics} metrics to influxdb",
@@ -378,27 +382,27 @@ class FastInfluxDBClient(InfluxDBClient):
         )
 
         with self.write_api(write_options=write_option) as write_api:
-            for bucket, metrics in influx_metrics_by_bucket.items():
-                outcome = ActionOutcome.SUCCESS
-                try:
-                    write_api.write(
-                        bucket=bucket,
-                        org=org,
-                        record=metrics,
-                        write_precision=write_precision,
-                    )
-                except InfluxDBError as e:
-                    outcome = ActionOutcome.FAILED
-                    raise ErrorException(f"Failed to write metrics: {e}") from e
-                finally:
-                    logger.info(**log_action_outcome(outcome=outcome))
+            outcome = ActionOutcome.SUCCESS
+            try:
+                write_api.write(
+                    bucket=bucket,
+                    org=org,
+                    record=metrics,
+                    write_precision=write_precision,
+                )
+            except InfluxDBError as e:
+                outcome = ActionOutcome.FAILED
+                raise ErrorException(f"Failed to write metrics: {e}") from e
+            finally:
+                logger.info(**log_action_outcome(outcome=outcome))
 
     def write_data(
         self,
         measurement: str,
         fields: dict,
         time=None,
-        write_precision=None,
+        tags: dict = None,
+        write_precision: WritePrecision = None,
     ):
         """
         Package some data into an InfluxMetric object and send it to InfluxDB.
@@ -409,16 +413,17 @@ class FastInfluxDBClient(InfluxDBClient):
         :return: None.
         """
         write_precision = write_precision or self.default_write_precision
-        time = time or datetime.now(timezone.utc)
+        time = time or datetime.now(timezone.utc).timestamp()
+        tags = tags or {}
 
-        influx_metric = InfluxMetric(
+        metric = InfluxMetric(
             measurement=measurement,
             time=time,
             fields=fields,
-            write_precision=write_precision,
+            tags=tags,
         )
         # Saving data to InfluxDB
-        self.write_metric(influx_metric)
+        self.write_metric(metric, write_precision=write_precision)
 
     def query_table(self, query: str):
         """

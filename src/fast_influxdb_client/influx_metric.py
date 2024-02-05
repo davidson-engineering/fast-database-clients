@@ -74,14 +74,15 @@ class InfluxMetric(Sequence):
         return value
 
 def dict_to_influx_metric(data: dict, defaults: dict = None) -> InfluxMetric:
+
     if isinstance(data, InfluxMetric):
-        return data
+        data = asdict(data)
 
     filtered_data = {key: value for key, value in data.items() if value is not None}
 
     # Apply default values if provided
     if defaults:
         for key, value in defaults.items():
-            filtered_data.setdefault(key, value)
+            data.setdefault(key, value)
 
     return InfluxMetric(**filtered_data)

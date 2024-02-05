@@ -46,6 +46,7 @@ from typing import List
 
 
 from influxdb_client import InfluxDBClient
+from influxdb_client.client.write.point import Point
 from influxdb_client.client.exceptions import InfluxDBError
 from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client.rest import ApiException
@@ -66,6 +67,14 @@ def group_by_key(objects: List[dict], key) -> dict:
         key: list(group) for key, group in groupby(sorted_objects, key=attrgetter(key))
     }
     return grouped_objects
+
+
+def dict_to_point(data: dict, write_precision=DEFAULT_WRITE_PRECISION_DATA) -> Point:
+    point = Point(data.pop("measurement"))
+    point.time(data.pop("time"), write_precision)
+    point.fields(data.pop("fields"))
+    point.tag(data.pop("tags"))
+    return point
 
 
 class ErrorException(Exception):
@@ -374,7 +383,7 @@ class FastInfluxDBClient(InfluxDBClient):
             bucket = self.default_bucket
 
         number_of_metrics = len(metrics)
-        metrics = [dict_to_influx_metric(metric) for metric in metrics]
+        metrics = [dict_to_point(metric) for metric in metrics]
 
         log_action_outcome = ActionOutcomeMessage(
             action=f"Sending {number_of_metrics} metrics to influxdb",
@@ -416,12 +425,7 @@ class FastInfluxDBClient(InfluxDBClient):
         time = time or datetime.now(timezone.utc).timestamp()
         tags = tags or {}
 
-        metric = InfluxMetric(
-            measurement=measurement,
-            time=time,
-            fields=fields,
-            tags=tags,
-        )
+        metric = Point(measurement).time(time, write_precision).fields(fields).tag(tags)
         # Saving data to InfluxDB
         self.write_metric(metric, write_precision=write_precision)
 

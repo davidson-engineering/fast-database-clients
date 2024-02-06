@@ -15,7 +15,7 @@ from datetime import datetime
 @dataclass
 class InfluxMetric(Sequence):
     measurement: str
-    fields: dict
+    fields: dict = field(default_factory=dict)
     time: float = field(default_factory=time.time)
     tags: dict = field(default_factory=dict)
 

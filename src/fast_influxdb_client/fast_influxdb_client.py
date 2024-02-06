@@ -52,11 +52,11 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client.rest import ApiException
 from influxdb_client.domain.write_precision import WritePrecision
 
-from fast_influxdb_client.influx_metric import InfluxMetric, dict_to_influx_metric
+from fast_influxdb_client.influx_metric import InfluxMetric
 from fast_influxdb_client.influx_log import InfluxLoggingHandler
 
 DEFAULT_WRITE_PRECISION_DATA = WritePrecision.S
-
+WRITE_BATCH_SIZE = 5000
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +84,12 @@ def dict_to_point(data: dict, write_precision=DEFAULT_WRITE_PRECISION_DATA) -> P
             point.tag(tag_name, tag_value)
 
     return point
+
+
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i : i + n]
 
 
 class ErrorException(Exception):
@@ -391,28 +397,29 @@ class FastInfluxDBClient(InfluxDBClient):
                 )
             bucket = self.default_bucket
 
-        number_of_metrics = len(metrics)
         metrics = [dict_to_point(metric) for metric in metrics]
 
-        log_action_outcome = ActionOutcomeMessage(
-            action=f"Sending {number_of_metrics} metrics to influxdb",
-            action_verbose=f"Sending {number_of_metrics} metrics to influxdb server at {self.url}",
-        )
-
         with self.write_api(write_options=write_option) as write_api:
-            outcome = ActionOutcome.SUCCESS
-            try:
-                write_api.write(
-                    bucket=bucket,
-                    org=org,
-                    record=metrics,
-                    write_precision=write_precision,
+            metrics_chunks = chunks(metrics, WRITE_BATCH_SIZE)
+            for metrics_batch in metrics_chunks:
+                number_of_metrics = len(metrics_batch)
+                log_action_outcome = ActionOutcomeMessage(
+                    action=f"Sending {number_of_metrics} metrics to influxdb",
+                    action_verbose=f"Sending {number_of_metrics} metrics to influxdb server at {self.url}",
                 )
-            except InfluxDBError as e:
-                outcome = ActionOutcome.FAILED
-                raise ErrorException(f"Failed to write metrics: {e}") from e
-            finally:
-                logger.info(**log_action_outcome(outcome=outcome))
+                outcome = ActionOutcome.SUCCESS
+                try:
+                    write_api.write(
+                        bucket=bucket,
+                        org=org,
+                        record=metrics_batch,
+                        write_precision=write_precision,
+                    )
+                except InfluxDBError as e:
+                    outcome = ActionOutcome.FAILED
+                    raise ErrorException(f"Failed to write metrics: {e}") from e
+                finally:
+                    logger.info(**log_action_outcome(outcome=outcome))
 
     def write_data(
         self,

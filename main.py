@@ -7,7 +7,7 @@
 """Demonstration of how to use the FastInfluxDBClient class to send metrics to InfluxDB server"""
 # ---------------------------------------------------------------------------
 
-from fast_influxdb_client import FastInfluxDBClient, InfluxMetric
+from fast_influxdb_client import FastInfluxDBClient
 import random
 import time
 import logging
@@ -77,13 +77,16 @@ def main():
             data2 = random.randint(0, 100)
             data3 = random.choice([True, False])
 
-            metric = InfluxMetric(
-                measurement="py_metric1",
-                fields={"data1": data, "data2": data2, "data3": data3},
-                time=datetime.now(timezone.utc),
-            )
+            metrics = [
+                dict(
+                    measurement="py_metric1",
+                    fields={"data1": data, "data2": data2, "data3": data3},
+                    time=datetime.now(timezone.utc),
+                )
+                for _ in range(10_000)
+            ]
 
-            client.write_metric(metric)
+            client.write_metric(metrics)
             time.sleep(1 + random.random())
 
 

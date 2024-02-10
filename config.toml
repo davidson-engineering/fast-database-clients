@@ -7,3 +7,7 @@
     auth_basic = false
     # profilers="query, operator"
     # proxy = "http://proxy.domain.org:8080"
+
+[extra]
+    default_bucket = "my_bucket"
+    write_precision = "ns"

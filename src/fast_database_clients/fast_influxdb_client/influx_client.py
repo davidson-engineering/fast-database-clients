@@ -427,6 +427,7 @@ class FastInfluxDBClient(DatabaseClientBase):
                     "No bucket specified, and no default bucket is specified."
                 )
             bucket = self.default_bucket
+            self.create_bucket(bucket)
 
         metrics = self.convert(metrics)
 

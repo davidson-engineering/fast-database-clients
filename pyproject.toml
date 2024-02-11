@@ -1,6 +1,6 @@
 [project]
-name = "fast-influxdb-client"
-description = "A class to facilitate rapid deployment of a class to send metrics to an InfluxDB server"
+name = "fast-database-clients"
+description = "A class to facilitate rapid deployment of clients to send data to various databases"
 
 # If a project, then you can specify version here
 # version = "0.0.0"
@@ -26,22 +26,25 @@ classifiers = [
 ]
 
 dependencies = [
-   "influxdb_client >= 1.38.0",
+   "influxdb_client >= 1.40.0",
 ]
+
+[tools.setuptools]
+packages = ["fast_database_clients"]
 
 # If a module, then use fetch version from src/module_name/__init__.py
 [tool.setuptools.dynamic]
-version = {attr = "fast_influxdb_client.__version__"}
+version = {attr = "fast_database_clients.__version__"}
 
 [project.optional-dependencies]
 test = [
-  "pytest >= 7.4.3",
+  "pytest >= 8.0.0",
 ]
 
 [project.urls]
 # homepage = "https://example.com"
 # documentation = "https://readthedocs.org"
-repository = "https://github.com/davidson-engineering/fast-influxdb-client"
+repository = "https://github.com/davidson-engineering/fast-database-clients"
 # changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
 
 # [project.scripts]

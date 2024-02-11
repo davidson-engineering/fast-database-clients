@@ -51,9 +51,9 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client.rest import ApiException
 from influxdb_client.domain.write_precision import WritePrecision
 
-from fast_db_clients.fast_db_client import DatabaseClientBase, load_config
-from fast_db_clients.fast_influxdb_client.metric import InfluxMetric
-from fast_db_clients.fast_influxdb_client.logger import InfluxLoggingHandler
+from fast_database_clients.fast_db_client import DatabaseClientBase, load_config
+from fast_database_clients.fast_influxdb_client.metric import InfluxMetric
+from fast_database_clients.fast_influxdb_client.logger import InfluxLoggingHandler
 
 DEFAULT_WRITE_PRECISION_DATA = WritePrecision.NS
 WRITE_BATCH_SIZE = 5000

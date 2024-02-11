@@ -11,7 +11,7 @@ import logging
 
 from influxdb_client.domain.write_precision import WritePrecision
 
-from fast_db_clients.fast_influxdb_client.metric import InfluxMetric
+from fast_database_clients.fast_influxdb_client.metric import InfluxMetric
 
 DEFAULT_WRITE_PRECISION_LOGS = WritePrecision.MS
 

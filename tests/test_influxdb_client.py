@@ -25,7 +25,10 @@ def test_fast_influxdb_client_write_metric(fast_influxdb_client):
 
 
 def test_fast_influxdb_client_write_data(fast_influxdb_client):
-    fast_influxdb_client.write(measurement="test_measurement", fields={"value": 42})
+    fast_influxdb_client.write(
+        dict(measurement="test_measurement", fields={"value": 42})
+    )
+    fast_influxdb_client.write(("test_measurement", {"value": 42}))
 
 
 def test_fast_influxdb_client_create_bucket(fast_influxdb_client):

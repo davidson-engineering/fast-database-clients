@@ -408,8 +408,8 @@ class FastInfluxDBClient(DatabaseClientBase):
         """
 
         if org is None:
-            if self.org is not None:
-                org = self.org
+            if self._client.org is not None:
+                org = self._client.org
             else:
                 raise FastInfluxDBClientConfigError("No org specified")
 

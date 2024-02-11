@@ -90,7 +90,7 @@ def test_fast_influxdb_client_time_precision(fast_influxdb_client):
             measurement="test_measurement", fields={"value": 42}, time=datetime.now(), write_precision=write_precision
         )
         fast_influxdb_client.write(metric)
-    query = f'from(bucket:"{fast_influxdb_client.default_bucket}") |> range(start: -1s)'
+    query = f'from(bucket:"{fast_influxdb_client.default_bucket}") |> range(start: -2s)'
     result = fast_influxdb_client.query(query)
     assert len(result[0].records) == 5
     

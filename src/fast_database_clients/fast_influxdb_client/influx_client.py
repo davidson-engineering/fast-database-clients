@@ -332,7 +332,9 @@ class FastInfluxDBClient(DatabaseClientBase):
         db_client = cls()
         db_client._client = client
         if isinstance(default_write_precision, str):
-            default_write_precision = WritePrecision(default_write_precision.upper())
+            default_write_precision = getattr(
+                WritePrecision, default_write_precision.upper()
+            )
         db_client.default_write_precision = default_write_precision
         db_client.write_batch_size = write_batch_size
         if default_bucket is not None:
@@ -372,7 +374,7 @@ class FastInfluxDBClient(DatabaseClientBase):
         db_client.write_batch_size = config.get("write_batch_size") or WRITE_BATCH_SIZE
         write_precision = config.get("write_precision")
         if isinstance(write_precision, str):
-            write_precision = WritePrecision(write_precision.upper())
+            write_precision = getattr(WritePrecision, write_precision.upper())
         db_client.default_write_precision = (
             write_precision or DEFAULT_WRITE_PRECISION_DATA
         )

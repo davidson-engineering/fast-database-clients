@@ -1,5 +1,5 @@
 import pytest
-from fast_db_clients import FastInfluxDBClient
+from fast_database_clients import FastInfluxDBClient
 
 
 @pytest.fixture

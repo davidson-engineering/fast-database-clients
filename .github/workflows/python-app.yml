@@ -1,7 +1,7 @@
-# This workflow will install Python dependencies, run tests and lint with a single version of Python
+# This workflow will install Python dependencies, run tests and lint with multiple versions of Python
 # For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python
 
-name: Python app
+name: database-client-testing
 
 on:
   push:
@@ -18,12 +18,29 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        os: [ubuntu-latest]
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+    # Setup service container for influxdb database.
+    # env variables set for minimal bootstrapped setup 
+    services:
+      influxdb-test:
+        image: influxdb:latest
+        ports:
+          - 8086:8086
+        env:
+          DOCKER_INFLUXDB_INIT_MODE: setup
+          DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: super_secret_token
+          DOCKER_INFLUXDB_INIT_ORG: my_org
+          DOCKER_INFLUXDB_INIT_BUCKET: testing
+          DOCKER_INFLUXDB_INIT_USERNAME: user
+          DOCKER_INFLUXDB_INIT_PASSWORD: password
+
     steps:
-    - uses: actions/checkout@v3
+    - name: Check out repository code
+      uses: actions/checkout@v4
+
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies

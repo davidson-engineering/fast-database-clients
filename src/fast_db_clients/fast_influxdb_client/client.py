@@ -33,7 +33,6 @@ Functions:
 """
 # ---------------------------------------------------------------------------
 from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
 from typing import Iterable, Union, Tuple
 import re
 import logging
@@ -52,9 +51,9 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client.rest import ApiException
 from influxdb_client.domain.write_precision import WritePrecision
 
-from fast_influxdb_client.db_client_base import DatabaseClientBase, load_config
-from fast_influxdb_client.influx_metric import InfluxMetric
-from fast_influxdb_client.influx_log import InfluxLoggingHandler
+from fast_db_clients.fast_db_client import DatabaseClientBase, load_config
+from fast_db_clients.fast_influxdb_client.metric import InfluxMetric
+from fast_db_clients.fast_influxdb_client.logger import InfluxLoggingHandler
 
 DEFAULT_WRITE_PRECISION_DATA = WritePrecision.NS
 WRITE_BATCH_SIZE = 5000
@@ -306,6 +305,7 @@ class FastInfluxDBClient(DatabaseClientBase):
         org: str = None,
         default_tags: dict = None,
         default_write_precision=DEFAULT_WRITE_PRECISION_DATA,
+        write_batch_size=WRITE_BATCH_SIZE,
         **kwargs,
     ):
         """
@@ -328,6 +328,7 @@ class FastInfluxDBClient(DatabaseClientBase):
         db_client = cls()
         db_client._client = client
         db_client.default_write_precision = default_write_precision
+        db_client.write_batch_size = write_batch_size
         if default_bucket is not None:
             db_client.create_bucket(default_bucket)
         return db_client
@@ -350,8 +351,7 @@ class FastInfluxDBClient(DatabaseClientBase):
         :return: FastInfluxDBClient object.
         """
 
-        # TODO Pass more parameters via config file
-        config = load_config(config_file)
+        config = load_config(config_file).get("db_client")
         # check if config file exists
         if not os.path.exists(config_file):
             raise FastInfluxDBClientConfigError(
@@ -363,8 +363,8 @@ class FastInfluxDBClient(DatabaseClientBase):
         )
         db_client = cls()
         db_client._client = client
-        db_client.default_org = db_client._client.org
-        # db_client.default_bucket = db_client._client.default_bucket
+        db_client.write_batch_size = config.get("write_batch_size") or WRITE_BATCH_SIZE
+        db_client.default_bucket = config.get("influx").get("default_bucket")
         return db_client
 
     def convert(self, metrics: Union[InfluxMetric, dict]) -> Point:
@@ -426,7 +426,7 @@ class FastInfluxDBClient(DatabaseClientBase):
         metrics = self.convert(metrics)
 
         with self._client.write_api(write_options=write_option) as write_api:
-            metrics_chunks = chunks(metrics, WRITE_BATCH_SIZE)
+            metrics_chunks = chunks(metrics, self.write_batch_size)
             for metrics_batch in metrics_chunks:
                 number_of_metrics = len(metrics_batch)
                 log_action_outcome = ActionOutcomeMessage(
@@ -446,30 +446,6 @@ class FastInfluxDBClient(DatabaseClientBase):
                     raise ErrorException(f"Failed to write metrics: {e}") from e
                 finally:
                     logger.info(**log_action_outcome(outcome=outcome))
-
-    def write_data(
-        self,
-        measurement: str,
-        fields: dict,
-        time=None,
-        tags: dict = None,
-        write_precision: WritePrecision = None,
-    ):
-        """
-        Package some data into an InfluxMetric object and send it to InfluxDB.
-
-        :param measurement: The measurement name.
-        :param fields: The dictionary of fields.
-        :param time: The datetime object.
-        :return: None.
-        """
-        write_precision = write_precision or self.default_write_precision
-        time = time or datetime.now(timezone.utc).timestamp()
-        tags = tags or {}
-
-        metric = Point(measurement).time(time, write_precision).fields(fields).tag(tags)
-        # Saving data to InfluxDB
-        self.write(metric, write_precision=write_precision)
 
     def query_table(self, query: str):
         """
@@ -495,7 +471,7 @@ class FastInfluxDBClient(DatabaseClientBase):
         return self._client.query_api().query(org=org, query=query)
 
     def __repr__(self):
-        return f"FastInfluxDBClient(url={self._client.url}, org={self.default_org}, default_bucket={self.default_bucket})"
+        return f"FastInfluxDBClient(url={self._client.url}, org={self._client.org}, default_bucket={self.default_bucket})"
 
     def get_logging_handler(
         self,
@@ -557,7 +533,7 @@ class FastInfluxDBClient(DatabaseClientBase):
 
         :return: List of buckets.
         """
-        return self.client.buckets_api().find_buckets()
+        return self._client.buckets_api().find_buckets()
 
     def enable_verbose_logging_to_console(self):
         """
@@ -581,7 +557,19 @@ class FastInfluxDBClient(DatabaseClientBase):
         return self._client.ping()
 
     def close(self):
-        return self._client.close()
+        self.__del__()
+
+    def __del__(self):
+        self._client.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        self.close()
+
+    def version(self):
+        return self._client.version()
 
 
 def main():

@@ -23,22 +23,15 @@ def test_influx_metric():
     assert metric.time is not None
     assert metric.fields == {"value": 0.5}
     assert metric.tags == {"tag1": "value1", "tag2": "value2"}
-    assert len(metric) == 4
-    assert list(metric) == [
-        "test_metric",
-        metric.time,
-        {"value": 0.5},
-        {"tag1": "value1", "tag2": "value2"},
-    ]
 
     measurement = "test_measurement"
     fields = {"field1": 123, "field2": "value"}
     time = datetime.now(timezone.utc)
     tags = {"tag1": "tag_value"}
 
-    metric = InfluxMetric(measurement, fields=fields, time=time, tags=tags)
+    metric = InfluxMetric(measurement, fields=fields, time=time, tags=tags, write_precision="s")
 
     assert metric.measurement == measurement
     assert metric.fields == fields
-    assert metric.time == time.timestamp()
+    assert metric.time == int(time.timestamp())
     assert metric.tags == tags

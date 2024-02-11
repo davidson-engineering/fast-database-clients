@@ -27,12 +27,12 @@ classifiers = [
 
 dependencies = [
    "influxdb_client >= 1.40.0",
-   "tomli >= 2.0.1",
+   "tomli >= 2.0.1 ; python_version < '3.11'",
    "pyyaml >= 6.0.1",
 ]
 
-[tools.setuptools]
-packages = ["fast_database_clients"]
+# [tool.setuptools]
+# packages = ["fast_database_clients"]
 
 # If a module, then use fetch version from src/module_name/__init__.py
 [tool.setuptools.dynamic]

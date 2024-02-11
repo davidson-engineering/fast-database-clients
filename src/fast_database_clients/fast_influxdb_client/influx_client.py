@@ -38,7 +38,6 @@ import re
 import logging
 import os
 import sys
-from enum import Enum
 from itertools import groupby
 from operator import attrgetter
 from typing import List
@@ -49,19 +48,27 @@ from influxdb_client.client.write.point import Point
 from influxdb_client.client.exceptions import InfluxDBError
 from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client.rest import ApiException
-from influxdb_client.domain.write_precision import WritePrecision
 
-from fast_database_clients.fast_db_client import DatabaseClientBase, load_config
+from fast_database_clients.fast_database_client import DatabaseClientBase, load_config
 from fast_database_clients.fast_influxdb_client.influx_metric import InfluxMetric
 from fast_database_clients.fast_influxdb_client.influx_logging import (
     InfluxLoggingHandler,
 )
+from fast_database_clients.action_outcome import ActionOutcome, ActionOutcomeMessage
+from fast_database_clients.exceptions import ErrorException
 
-DEFAULT_WRITE_PRECISION_DATA = WritePrecision.NS
+DEFAULT_WRITE_PRECISION_DATA = 'ns'
 WRITE_BATCH_SIZE = 5000
 
 logger = logging.getLogger(__name__)
 
+
+class FastInfluxDBClientConfigError(ErrorException):
+    """
+    Raised when there is an error with the config file
+    """
+
+    pass
 
 def group_by_key(objects: List[dict], key) -> dict:
     sorted_objects = sorted(objects, key=attrgetter(key))
@@ -70,6 +77,9 @@ def group_by_key(objects: List[dict], key) -> dict:
     }
     return grouped_objects
 
+def verify_write_precision(write_precision: str) -> bool:
+    assert isinstance(write_precision, str)
+    assert write_precision in set("ns", "us", "ms", "s")
 
 def dict_to_point(
     data: Union[dict, InfluxMetric], write_precision=DEFAULT_WRITE_PRECISION_DATA
@@ -98,110 +108,8 @@ def chunks(lst, n):
         yield lst[i : i + n]
 
 
-class ErrorException(Exception):
-    """
-    Base class for other exceptions
-    """
-
-    def __init__(self, message):
-        self.message = message
-        logger.error(message)
 
 
-class FastInfluxDBClientConfigError(ErrorException):
-    """
-    Raised when there is an error with the config file
-    """
-
-    pass
-
-
-# Enum type for success and failure of action->outcome messaging pair
-class ActionOutcome(str, Enum):
-    SUCCESS = "success"
-    FAILED = "failed"
-
-    def __str__(self):
-        return self.value.upper()
-
-
-@dataclass
-class ActionOutcomeMessage:
-    """
-    A class to generate messages representing an action -> outcome
-
-    Attributes:
-        action (str): The action.
-        action_verbose (str): The verbose action.
-        outcome (str): The outcome.
-
-    Methods:
-        message: Get the message representing the action -> outcome.
-        message_verbose: Get the verbose message representing the action -> outcome.
-        __call__: Update the action, outcome, or action_verbose attributes and return a log record.
-
-    Examples:
-        >>> log_action_outcome = ActionOutcomeMessage(
-                action="Sending metric to influxdb",
-                action_verbose=f"Sending metric:{metric.name} to bucket:'{bucket}' on influxdb at {self.url}"
-            )
-        >>> log_action_outcome(outcome=ActionOutcome.SUCCESS)
-        {
-            'msg': 'Sending metric to influxdb -> success',
-            'extra': {'details': "Sending metric:py_metric1 to bucket:'metrics2' on influxdb at http://localhost:8086"}
-        }
-        >>> log_action_outcome(outcome=ActionOutcome.FAILED)
-        {
-            'msg': 'Sending metric to influxdb -> failed',
-            'extra': {'details': "Sending metric:py_metric1 to bucket:'metrics2' on influxdb at http://localhost:8086"}
-        }
-    """
-
-    action: str
-    action_verbose: str = None
-    outcome: str = None
-
-    @property
-    def message(self):
-        """
-        Get the message representing the action -> outcome.
-
-        Returns:
-            str: The message representing the action -> outcome.
-        """
-        return f"{self.action} -> {self.outcome}"
-
-    @property
-    def message_verbose(self):
-        """
-        Get the verbose message representing the action -> outcome.
-
-        Returns:
-            str: The verbose message representing the action -> outcome.
-        """
-        return f"{self.action_verbose} -> {self.outcome}"
-
-    def __call__(self, action=None, outcome=None, action_verbose=None):
-        """
-        Update the action, outcome, or action_verbose attributes and return a log record.
-
-        Args:
-            action (str): The action to update.
-            outcome (str): The outcome to update.
-            action_verbose (str): The verbose action to update.
-
-        Returns:
-            dict: A log record containing the message and details.
-        """
-        if action:
-            self.action = action
-        if outcome:
-            self.outcome = outcome
-        if action_verbose:
-            self.action_verbose = action_verbose
-
-        log_record = dict(msg=self.message, extra=dict(details=self.message_verbose))
-        return log_record
 
 
 def convert_to_seconds(time_string):
@@ -306,9 +214,7 @@ class FastInfluxDBClient(DatabaseClientBase):
         enable_gzip: bool = False,
         org: str = None,
         default_tags: dict = None,
-        default_write_precision: Union[
-            WritePrecision, str
-        ] = DEFAULT_WRITE_PRECISION_DATA,
+        default_write_precision: str = None,
         write_batch_size: int = WRITE_BATCH_SIZE,
         **kwargs,
     ):
@@ -331,11 +237,10 @@ class FastInfluxDBClient(DatabaseClientBase):
         )
         db_client = cls()
         db_client._client = client
-        if isinstance(default_write_precision, str):
-            default_write_precision = getattr(
-                WritePrecision, default_write_precision.upper()
-            )
-        db_client.default_write_precision = default_write_precision
+
+        if default_write_precision:
+            verify_write_precision(default_write_precision)
+        db_client.default_write_precision = default_write_precision or DEFAULT_WRITE_PRECISION_DATA
         db_client.write_batch_size = write_batch_size
         if default_bucket is not None:
             db_client.create_bucket(default_bucket)
@@ -372,16 +277,16 @@ class FastInfluxDBClient(DatabaseClientBase):
         db_client = cls()
         db_client._client = client
         db_client.write_batch_size = config.get("write_batch_size") or WRITE_BATCH_SIZE
-        write_precision = config.get("write_precision")
-        if isinstance(write_precision, str):
-            write_precision = getattr(WritePrecision, write_precision.upper())
+        default_write_precision = config.get("default_write_precision")
+        if default_write_precision:
+            verify_write_precision(default_write_precision)
         db_client.default_write_precision = (
-            write_precision or DEFAULT_WRITE_PRECISION_DATA
+            default_write_precision or DEFAULT_WRITE_PRECISION_DATA
         )
         db_client.default_bucket = config.get("influx").get("default_bucket")
         return db_client
 
-    def convert(self, metrics: Union[InfluxMetric, dict]) -> Point:
+    def convert(self, metrics: Union[InfluxMetric, dict], write_precision: str = None) -> Point:
         """
         Convert a container of metrics to a Point object.
 
@@ -391,7 +296,7 @@ class FastInfluxDBClient(DatabaseClientBase):
         if isinstance(metrics, (InfluxMetric, dict)):
             metrics = [metrics]
 
-        metrics = [dict_to_point(metric) for metric in metrics]
+        metrics = [dict_to_point(metric, write_precision=write_precision) for metric in metrics]
 
         return metrics
 
@@ -408,7 +313,7 @@ class FastInfluxDBClient(DatabaseClientBase):
         bucket: str = None,
         org: str = None,
         write_option=SYNCHRONOUS,
-        write_precision: WritePrecision = None,
+        write_precision: str = None,
     ) -> None:
         """
         Write a metric to the InfluxDB server.
@@ -422,13 +327,15 @@ class FastInfluxDBClient(DatabaseClientBase):
         """
 
         if org is None:
-            if self._client.org is not None:
-                org = self._client.org
+            if self.org is not None:
+                org = self.org
             else:
                 raise FastInfluxDBClientConfigError("No org specified")
 
         if write_precision is None:
             write_precision = self.default_write_precision
+        else:
+            assert verify_write_precision(write_precision)
 
         if bucket is None:
             if self.default_bucket is None:
@@ -436,9 +343,8 @@ class FastInfluxDBClient(DatabaseClientBase):
                     "No bucket specified, and no default bucket is specified."
                 )
             bucket = self.default_bucket
-            self.create_bucket(bucket)
 
-        metrics = self.convert(metrics)
+        metrics = self.convert(metrics, write_precision=write_precision)
 
         with self._client.write_api(write_options=write_option) as write_api:
             metrics_chunks = chunks(metrics, self.write_batch_size)
@@ -520,8 +426,8 @@ class FastInfluxDBClient(DatabaseClientBase):
 
         except ApiException as e:
             if e.status == 422:
-                logger.warning(
-                    f"Bucket {bucket_name} already exists. Bucket not created"
+                logger.info(
+                    f"Bucket {bucket_name} already exists"
                 )
             else:
                 raise e
@@ -570,6 +476,23 @@ class FastInfluxDBClient(DatabaseClientBase):
         :return: bool ping status.
         """
         return self._client.ping()
+    
+    @property
+    def default_bucket(self):
+        return self._default_bucket
+    
+    @default_bucket.setter
+    def default_bucket(self, bucket: str):
+        self._default_bucket = bucket
+        # If the bucket does not exist, create it
+        self.create_bucket(bucket)
+    
+    @property
+    def org(self):
+        return self._client.org
+    
+    def write_api(self):
+        return self._client.write_api()
 
     def close(self):
         self.__del__()
@@ -588,17 +511,16 @@ class FastInfluxDBClient(DatabaseClientBase):
 
 
 def main():
+    from datetime import datetime
     # create an fastinfluxDB client, and create a bucket
     bucket = "metrics3"
     config_file = "config.toml"
     # Create new client
     client = FastInfluxDBClient.from_config_file(config_file=config_file)
-    print(f"{client=}")
-    print(client.list_buckets())
-    client.default_bucket = bucket
-    client.create_bucket(bucket)
-    client.update_bucket(bucket, retention_duration="7d")
-    print(f"{client.default_bucket=}")
+    metric = InfluxMetric(
+        measurement="test_measurement", fields={"value": 42}, time=datetime.now()
+    )
+    client.write(metric)
 
 
 if __name__ == "__main__":

@@ -125,7 +125,7 @@ class InfluxLoggingHandler(logging.Handler):
         self.set_name(name)
         self._client = client
         self.measurement = measurement
-        self.org = org or client.default_org
+        self.org = org or client.org
         self.log_bucket = bucket or client.default_bucket
         self.time_precsion = time_precision
         self.setFormatter(logging.Formatter(fmt=messagefmt, datefmt=datefmt))

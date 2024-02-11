@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 
 def setup_logging(client):
     # get __main__ logger
-    logger = logging.getLogger("fast_influxdb_client.fast_influxdb_client")
+    logger = logging.getLogger()
 
     # setup logging handler to console
     ch = logging.StreamHandler()
@@ -86,8 +86,10 @@ def main():
                 for _ in range(10_000)
             ]
 
-            client.write_metric(metrics)
+            client.write(metrics)
             time.sleep(1 + random.random())
+            from fast_database_clients.fast_influxdb_client.influx_client import ErrorException
+            ErrorException("Error")
 
 
 if __name__ == "__main__":

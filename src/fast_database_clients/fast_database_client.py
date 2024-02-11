@@ -33,10 +33,13 @@ def load_config(filepath: Union[str, Path]) -> dict:
             return yaml.safe_load(file)
     # if extension is .toml
     if filepath.suffix == ".toml":
-        import tomli
+        try:
+            import tomllib
+        except ImportError:
+            import tomli as tomllib
 
         with open(filepath, "rb") as file:
-            return tomli.load(file)
+            return tomllib.load(file)
 
     # else load as binary
     with open(filepath, "rb") as file:

@@ -10,14 +10,19 @@ from dataclasses import dataclass, field, asdict
 from typing import Any, Sequence
 import time
 from datetime import datetime
+from fast_database_clients.exceptions import ErrorException
 
+class TimeFormatError(ErrorException):
+    def __init__(self, message="Time has not been provided in a compatible format"):
+        super().__init__(message)
 
 @dataclass
 class InfluxMetric(Sequence):
     measurement: str
     fields: dict = field(default_factory=dict)
-    time: float = field(default_factory=time.time)
+    time: float = field(default_factory=time.time_ns)
     tags: dict = field(default_factory=dict)
+    write_precision: str = "ns"
 
     def __iter__(self) -> Any:
         yield from (
@@ -49,7 +54,6 @@ class InfluxMetric(Sequence):
         type_mapping = {
             "measurement": str,
             "fields": dict,
-            "time": float,
             "tags": dict,
         }
         for field_name, expected_type in type_mapping.items():
@@ -62,6 +66,8 @@ class InfluxMetric(Sequence):
             except TypeError:
                 converted_value = self._convert_to_expected_type(value, expected_type)
                 setattr(self, field_name, converted_value)
+        # Convert time to ns
+        setattr(self, "time", self._convert_time_to_ns(self.time))
 
     def _convert_to_expected_type(self, value, expected_type):
         if expected_type is int and isinstance(value, (float, str)):
@@ -70,10 +76,20 @@ class InfluxMetric(Sequence):
             return float(value)
         elif expected_type is str and isinstance(value, (int, float)):
             return str(value)
-        elif expected_type is float and isinstance(value, datetime):
-            return value.timestamp()
         return value
 
+    def _convert_time_to_ns(self, time: datetime) -> int:
+        match self.write_precision:
+            case "s": time_factor = 1
+            case "ms": time_factor = 1e3
+            case "us": time_factor = 1e6
+            case "ns": time_factor = 1e9
+        if isinstance(time, datetime):
+            return int(time.timestamp() * time_factor)
+        if isinstance(time, (int, float)):
+            return int(time * time_factor)
+        else:
+            raise TimeFormatError()
 
 def dict_to_influx_metric(data: dict, defaults: dict = None) -> InfluxMetric:
 

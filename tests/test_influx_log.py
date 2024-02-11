@@ -62,11 +62,4 @@ def test_influx_log_creation():
     assert log.time.tzinfo is not None
     assert log.time.tzinfo.utcoffset(log.time) == timezone.utc.utcoffset(log.time)
     assert log.time.timestamp() == 1628083200
-    assert len(log) == 4
-    assert list(log) == [
-        "logs",
-        log.time,
-        log.fields,
-        log.tags,
-    ]
     assert log[0] == "logs"

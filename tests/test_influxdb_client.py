@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime
 
 from fast_database_clients.fast_influxdb_client import (
     FastInfluxDBClient,
@@ -20,15 +21,17 @@ def test_fast_influxdb_client_creation(fast_influxdb_client):
 
 
 def test_fast_influxdb_client_write_metric(fast_influxdb_client):
-    metric = InfluxMetric(measurement="test_measurement", fields={"value": 42})
+    metric = InfluxMetric(
+        measurement="test_measurement", fields={"value": 42}, time=datetime.now()
+    )
     fast_influxdb_client.write(metric)
 
 
 def test_fast_influxdb_client_write_data(fast_influxdb_client):
     fast_influxdb_client.write(
-        dict(measurement="test_measurement", fields={"value": 42})
+        dict(measurement="test_measurement", fields={"value": 42}, time=datetime.now())
     )
-    fast_influxdb_client.write(("test_measurement", {"value": 42}))
+    fast_influxdb_client.write(("test_measurement", {"value": 42}, datetime.now()))
 
 
 def test_fast_influxdb_client_create_bucket(fast_influxdb_client):

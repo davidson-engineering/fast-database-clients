@@ -436,7 +436,7 @@ class FastInfluxDBClient(DatabaseClientBase):
                 number_of_metrics = len(metrics_batch)
                 log_action_outcome = ActionOutcomeMessage(
                     action=f"Sending {number_of_metrics} metrics to influxdb",
-                    action_verbose=f"Sending {number_of_metrics} metrics to influxdb server at {self.url}",
+                    action_verbose=f"Sending {number_of_metrics} metrics to influxdb server at {self._client.url}",
                 )
                 outcome = ActionOutcome.SUCCESS
                 try:

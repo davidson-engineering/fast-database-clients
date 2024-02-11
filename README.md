@@ -28,7 +28,7 @@ while 1:
         time=datetime.now(timezone.utc),
     )
 
-    client.write_metric(metric)
+    client.write(metric)
     time.sleep(10)
 
 ```

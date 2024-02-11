@@ -161,4 +161,4 @@ cython_debug/
 .env
 .vscode
 build/
-/config.toml
+config.toml

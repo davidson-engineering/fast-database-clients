@@ -1,0 +1,13 @@
+[influx2]
+    url = "http://localhost:8086"
+    token = "super_secret_token"
+    org = "my_org"
+    timeout =  10_000
+    connection_pool_maxsize = 25
+    auth_basic = false
+
+
+[db_client.influx]
+    default_bucket = "my_bucket"
+    default_write_precision = "ns"
+    write_batch_size = 5000

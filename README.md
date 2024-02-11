@@ -1,7 +1,9 @@
-# Fast InfluxDB Client
+# fast-database-clients
 
-A class to facilitate rapid deployment of a class to send metrics to an InfluxDB server.
+A class to facilitate rapid deployment of a client to connect to various databases
 
+
+fast-influxdb-client
 
 ```python
 from fast_influxdb_client import FastInfluxDBClient, InfluxMetric

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from fast_db_clients.fast_influxdb_client import InfluxLog
+from fast_database_clients.fast_influxdb_client import InfluxLog
 from datetime import timezone
 
 

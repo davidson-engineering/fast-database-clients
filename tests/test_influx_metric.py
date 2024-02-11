@@ -2,7 +2,7 @@ from datetime import timezone
 
 
 def test_influx_metric():
-    from fast_db_clients.fast_influxdb_client import InfluxMetric
+    from fast_database_clients.fast_influxdb_client import InfluxMetric
     from datetime import datetime
 
     metric = InfluxMetric(

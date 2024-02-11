@@ -7,7 +7,7 @@
 """Demonstration of how to use the FastInfluxDBClient class to send metrics to InfluxDB server"""
 # ---------------------------------------------------------------------------
 
-from fast_db_clients import FastInfluxDBClient
+from fast_database_clients import FastInfluxDBClient
 import random
 import time
 import logging

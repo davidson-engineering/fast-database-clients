@@ -1,6 +1,6 @@
 import pytest
 
-from fast_db_clients.fast_influxdb_client import (
+from fast_database_clients.fast_influxdb_client import (
     FastInfluxDBClient,
     InfluxMetric,
     convert_to_seconds,

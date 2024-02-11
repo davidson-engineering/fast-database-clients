@@ -36,6 +36,9 @@ def test_fast_influxdb_client_time_precision(fast_influxdb_client):
     
     import time
     
+    time.sleep(1)
+    
+    
     write_precision = "ms"
     fast_influxdb_client.default_write_precision = write_precision
     metric = InfluxMetric(

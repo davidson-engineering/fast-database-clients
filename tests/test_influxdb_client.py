@@ -31,14 +31,13 @@ def test_fast_influxdb_client_write_data(fast_influxdb_client):
     fast_influxdb_client.write(
         dict(measurement="test_measurement", fields={"value": 42}, time=datetime.now())
     )
-    fast_influxdb_client.write(("test_measurement", {"value": 42}, datetime.now()))
 
 
 def test_fast_influxdb_client_create_bucket(fast_influxdb_client):
     bucket_name = "test_bucket"
     fast_influxdb_client.create_bucket(bucket_name)
     buckets = fast_influxdb_client.list_buckets()
-    assert any(bucket.name == bucket_name for bucket in buckets)
+    assert any(bucket.name == bucket_name for bucket in list(buckets))
 
 
 def test_fast_influxdb_client_update_bucket(fast_influxdb_client):

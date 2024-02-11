@@ -79,11 +79,12 @@ class InfluxMetric(Sequence):
         return value
 
     def _convert_time_to_ns(self, time: datetime) -> int:
-        match self.write_precision:
-            case "s": time_factor = 1
-            case "ms": time_factor = 1e3
-            case "us": time_factor = 1e6
-            case "ns": time_factor = 1e9
+        wp = self.write_precision
+        if wp == "s": time_factor = 1
+        elif wp == "ms": time_factor = 1e3
+        elif wp == "us": time_factor = 1e6
+        elif wp == "ns": time_factor = 1e9
+        else: raise TimeFormatError(f"Write precision '{wp}' not supported")
         if isinstance(time, datetime):
             return int(time.timestamp() * time_factor)
         if isinstance(time, (int, float)):

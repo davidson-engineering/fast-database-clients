@@ -51,14 +51,17 @@ from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client.rest import ApiException
 
 from fast_database_clients.fast_database_client import DatabaseClientBase, load_config
-from fast_database_clients.fast_influxdb_client.influx_metric import InfluxMetric, localize_timestamp, convert_time_to_ns
+from fast_database_clients.fast_influxdb_client.influx_metric import (
+    InfluxMetric,
+    convert_time,
+)
 from fast_database_clients.fast_influxdb_client.influx_logging import (
     InfluxLoggingHandler,
 )
 from fast_database_clients.action_outcome import ActionOutcome, ActionOutcomeMessage
 from fast_database_clients.exceptions import ErrorException
 
-DEFAULT_WRITE_PRECISION_DATA = 'ns'
+DEFAULT_WRITE_PRECISION_DATA = "ns"
 WRITE_BATCH_SIZE = 5000
 
 logger = logging.getLogger(__name__)
@@ -79,26 +82,29 @@ class FastInfluxDBClientConfigError(ErrorException):
 #     }
 #     return grouped_objects
 
+
 def verify_write_precision(write_precision: str) -> bool:
     assert isinstance(write_precision, str)
     assert write_precision in set("ns", "us", "ms", "s")
 
+
 def dict_to_point(
-    data: Union[dict, InfluxMetric], write_precision=DEFAULT_WRITE_PRECISION_DATA, local_tz=None
+    data: Union[dict, InfluxMetric],
+    write_precision=DEFAULT_WRITE_PRECISION_DATA,
+    local_tz=None,
 ) -> Point:
+
     if isinstance(data, InfluxMetric):
         data = asdict(data)
+
     measurement = data.pop("measurement")
     time_value = data.pop("time")
     fields = data.pop("fields")
-    
+
     if local_tz:
-        if isinstance(time_value, int):
-            time_ns = time_value
-        elif isinstance(time_value, (datetime, float)):
-            time_ns = convert_time_to_ns(time_value, write_precision)
-        if local_tz:
-            time_value = localize_timestamp(time_ns, local_tz)
+        time_value = localize_time(time_value, local_tz)
+
+    time_value = convert_time(time_value, write_precision)
 
     point = Point(measurement).time(time_value, write_precision)
 
@@ -112,43 +118,30 @@ def dict_to_point(
     return point
 
 
+def localize_time(
+    time: Union[int, float, datetime], timezone_str: str = "UTC"
+) -> datetime:
+    """
+    Localize a timestamp to a timezone
+    :param time: The timestamp to localize
+    :param timezone_str: The timezone to localize to
+    :return: The localized timestamp
+    """
 
-# def localize_timestamp(
-#     timestamp: Union[int, float, datetime], timezone_str: str = "UTC"
-# ) -> datetime:
-#     """
-#     Localize a timestamp to a timezone
-#     :param timestamp: The timestamp to localize
-#     :param timezone_str: The timezone to localize to
-#     :return: The localized timestamp
-#     """
+    if isinstance(time, (int, float)):
+        dt_utc = datetime.fromtimestamp(time)
+    elif isinstance(time, datetime):
+        dt_utc = time
+    else:
+        raise ValueError("time must be a float, int, or datetime object")
+    timezone = pytz.timezone(timezone_str)
+    return timezone.localize(dt_utc)
 
-#     if isinstance(timestamp, (int, float)):
-#         dt_utc = datetime.fromtimestamp(timestamp)
-#     elif isinstance(timestamp, datetime):
-#         dt_utc = timestamp
-#     else:
-#         raise ValueError("timestamp must be a float, int, or datetime object")
-#     timezone = pytz.timezone(timezone_str)
-#     return timezone.localize(dt_utc)
-
-def check_attributes(
-    metric: dict, keys: tuple = ("measurement", "fields", "time")
-) -> bool:
-    try:
-        assert all(key in metric for key in keys)
-    except AssertionError as e:
-        raise AttributeError(f"Metric must contain {keys}") from e
-    return True
 
 def chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), n):
         yield lst[i : i + n]
-
-
-
-
 
 
 def convert_to_seconds(time_string):
@@ -279,7 +272,9 @@ class FastInfluxDBClient(DatabaseClientBase):
 
         if default_write_precision:
             verify_write_precision(default_write_precision)
-        db_client.default_write_precision = default_write_precision or DEFAULT_WRITE_PRECISION_DATA
+        db_client.default_write_precision = (
+            default_write_precision or DEFAULT_WRITE_PRECISION_DATA
+        )
         db_client.write_batch_size = write_batch_size
         if default_bucket is not None:
             db_client.create_bucket(default_bucket)
@@ -288,10 +283,9 @@ class FastInfluxDBClient(DatabaseClientBase):
     @classmethod
     def from_config_file(
         cls,
-        config_file: str = "config.ini",
+        config_file: str = "config.toml",
         debug: None = None,
         enable_gzip: bool = False,
-        local_tz=None,
         **kwargs,
     ):
         """
@@ -309,7 +303,7 @@ class FastInfluxDBClient(DatabaseClientBase):
             raise FastInfluxDBClientConfigError(
                 f"Config file '{config_file}' does not exist"
             )
-        config = load_config(config_file).get("db_client")
+        config = load_config(config_file).get("database_client")
 
         client = InfluxDBClient.from_config_file(
             config_file, debug, enable_gzip, **kwargs
@@ -324,10 +318,12 @@ class FastInfluxDBClient(DatabaseClientBase):
             default_write_precision or DEFAULT_WRITE_PRECISION_DATA
         )
         db_client.default_bucket = config.get("influx").get("default_bucket")
-        db_client.local_tz = local_tz
+        db_client.local_tz = config.get("influx").get("local_tz", "UTC")
         return db_client
 
-    def convert(self, metrics: Union[InfluxMetric, dict], write_precision: str = None) -> Point:
+    def convert(
+        self, metrics: Union[InfluxMetric, dict], write_precision: str = None
+    ) -> Point:
         """
         Convert a container of metrics to a Point object.
 
@@ -336,12 +332,10 @@ class FastInfluxDBClient(DatabaseClientBase):
         """
         if isinstance(metrics, (InfluxMetric, dict)):
             metrics = [metrics]
-            
-        if self.local_tz:
-            for metric in metrics:
-                metric.time = localize_timestamp(metric.time, self.local_tz)
 
-        metrics = [dict_to_point(metric, write_precision=write_precision) for metric in metrics]
+        metrics = [
+            dict_to_point(metric, write_precision=write_precision, local_tz=self.local_tz) for metric in metrics
+        ]
 
         return metrics
 
@@ -471,9 +465,7 @@ class FastInfluxDBClient(DatabaseClientBase):
 
         except ApiException as e:
             if e.status == 422:
-                logger.info(
-                    f"Bucket {bucket_name} already exists"
-                )
+                logger.info(f"Bucket {bucket_name} already exists")
             else:
                 raise e
 
@@ -521,21 +513,21 @@ class FastInfluxDBClient(DatabaseClientBase):
         :return: bool ping status.
         """
         return self._client.ping()
-    
+
     @property
     def default_bucket(self):
         return self._default_bucket
-    
+
     @default_bucket.setter
     def default_bucket(self, bucket: str):
         self._default_bucket = bucket
         # If the bucket does not exist, create it
         self.create_bucket(bucket)
-    
+
     @property
     def org(self):
         return self._client.org
-    
+
     def write_api(self):
         return self._client.write_api()
 
@@ -557,6 +549,7 @@ class FastInfluxDBClient(DatabaseClientBase):
 
 def main():
     from datetime import datetime
+
     # create an fastinfluxDB client, and create a bucket
     bucket = "metrics3"
     config_file = "config.toml"

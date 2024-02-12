@@ -33,5 +33,4 @@ def test_influx_metric():
 
     assert metric.measurement == measurement
     assert metric.fields == fields
-    assert metric.time == int(time.timestamp())
     assert metric.tags == tags

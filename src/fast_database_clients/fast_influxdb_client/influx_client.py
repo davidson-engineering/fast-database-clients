@@ -522,7 +522,10 @@ class FastInfluxDBClient(DatabaseClientBase):
     def default_bucket(self, bucket: str):
         self._default_bucket = bucket
         # If the bucket does not exist, create it
-        self.create_bucket(bucket)
+        try:
+            self.create_bucket(bucket)
+        except InfluxDBError:
+            logging.warning("Provided token does not have sufficient permission to create buckets. This is non-critical.")
 
     @property
     def org(self):

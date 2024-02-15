@@ -92,16 +92,16 @@ class InfluxMetric(Sequence):
         )
 
     def __getitem__(self, index) -> Any:
-        if index == 0:
+        if index == 0 or index == "measurement":
             return self.measurement
-        elif index == 1:
+        elif index == 1 or index == "fields":
             return self.fields
-        elif index == 2:
+        elif index == 2 or index == "time":
             return self.time
-        elif index == 3:
+        elif index == 3 or index == "tags:
             return self.tags
         else:
-            raise IndexError("InfluxMetric index out of range")
+            raise IndexError(f"InfluxMetric index '{index}' out of range")
 
     def __len__(self) -> int:
         return len(asdict(self))

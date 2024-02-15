@@ -106,6 +106,12 @@ class InfluxMetric(Sequence):
         else:
             raise IndexError(f"InfluxMetric index '{index}' out of range")
 
+    def __setitem__(self, key, value):
+        if key in [field.name for field in fields(self)]:
+            setattr(self, key, value)
+        else:
+            raise KeyError(f"'{type(self).__name__}' object has no attribute '{key}'")
+
     def __len__(self) -> int:
         return len(asdict(self))
 

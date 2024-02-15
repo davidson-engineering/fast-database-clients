@@ -7,7 +7,7 @@
 # ---------------------------------------------------------------------------
 
 from __future__ import annotations
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, fields, asdict
 from typing import Any, Sequence
 import time
 from datetime import datetime

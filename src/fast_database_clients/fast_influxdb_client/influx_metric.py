@@ -92,13 +92,16 @@ class InfluxMetric(Sequence):
         )
 
     def __getitem__(self, index) -> Any:
-        if index == 0 or index == "measurement":
+        if isinstance(index, str):
+            # Replicate dict like key:value getitem behaviour
+            return asdict(self)[index]
+        if index == 0:
             return self.measurement
-        elif index == 1 or index == "fields":
+        elif index == 1:
             return self.fields
-        elif index == 2 or index == "time":
+        elif index == 2:
             return self.time
-        elif index == 3 or index == "tags:
+        elif index == 3:
             return self.tags
         else:
             raise IndexError(f"InfluxMetric index '{index}' out of range")

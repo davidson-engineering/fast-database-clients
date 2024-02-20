@@ -1,4 +1,4 @@
-__version__ = "2.0.4"
+__version__ = "2.0.5"
 
 from fast_database_clients.fast_database_client import DatabaseClientBase
 from fast_database_clients.fast_influxdb_client import (

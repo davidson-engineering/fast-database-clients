@@ -1,6 +1,6 @@
 # fast-database-clients
 
-## A class to facilitate rapid deployment of a client to connect to various databases
+## A library to facilitate rapid deployment of a client to connect to various databases
 
 
 ### fast-influxdb-client

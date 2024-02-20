@@ -9,6 +9,12 @@
 from abc import ABC, abstractmethod
 from typing import Union
 from pathlib import Path
+from collections import deque
+import threading
+import time
+
+MAX_BUFFER_LENGTH = 65_536
+WRITE_BATCH_SIZE = 5_000
 
 
 def load_config(filepath: Union[str, Path]) -> dict:
@@ -47,9 +53,15 @@ def load_config(filepath: Union[str, Path]) -> dict:
 
 
 class DatabaseClientBase(ABC):
-    def __init__(self, **kwargs):
+    def __init__(self, buffer=None, write_interval=0.5, **kwargs):
         self._kwargs = kwargs
         self._client = None
+        self._last_write_time = time.time()
+        self.write_interval = write_interval
+        if buffer is not None:
+            self.buffer = buffer
+        else:
+            self.buffer = deque(maxlen=MAX_BUFFER_LENGTH)
 
     @abstractmethod
     def ping(self): ...
@@ -70,8 +82,22 @@ class DatabaseClientBase(ABC):
         """Shutdown the client."""
         self.__del__()
 
+    def write_periodically(self):
+        while True:
+            time_condition = (time.time() - self._last_write_time) > self.write_interval
+            if self.buffer and (len(self.buffer) > WRITE_BATCH_SIZE or time_condition):
+                metrics = tuple(self.buffer.popleft() for _ in range(WRITE_BATCH_SIZE))
+                self.write(metrics)
+                self._last_write_time = time.time()
+
+    def start(self):
+        self.write_thread = threading.Thread(
+            target=self.write_periodically, daemon=True
+        )
+        self.write_thread.start()
+
     def __del__(self):
-        self.close()
+        self.write_thread.join()
 
     def __enter__(self):
         return self

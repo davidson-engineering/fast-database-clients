@@ -9,6 +9,7 @@
 from abc import ABC, abstractmethod
 from typing import Union
 from pathlib import Path
+import asyncio
 
 
 def load_config(filepath: Union[str, Path]) -> dict:
@@ -47,9 +48,10 @@ def load_config(filepath: Union[str, Path]) -> dict:
 
 
 class DatabaseClientBase(ABC):
-    def __init__(self, **kwargs):
+    def __init__(self, buffer=None, **kwargs):
         self._kwargs = kwargs
         self._client = None
+        self._buffer = buffer if buffer else []
 
     @abstractmethod
     def ping(self): ...
@@ -65,6 +67,22 @@ class DatabaseClientBase(ABC):
 
     def convert(self, data):
         return data
+
+    async def async_drain(self):
+        """Flush the buffer to the database asynchronously."""
+        if self._buffer:
+            await self.write(self._buffer)
+            self._buffer = []
+
+    def drain(self):
+        """Start a new thread to flush the buffer to the database."""
+        import threading
+
+        threading.Thread(target=self._drain_thread).start()
+
+    def _drain_thread(self):
+        """Wrapper method for threaded draining."""
+        asyncio.run(self.drain())
 
     def close(self):
         """Shutdown the client."""

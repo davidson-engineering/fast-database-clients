@@ -12,10 +12,10 @@ from pathlib import Path
 from collections import deque
 import threading
 import time
+import asyncio
 
 MAX_BUFFER_LENGTH = 65_536
 WRITE_BATCH_SIZE = 5_000
-
 
 def load_config(filepath: Union[str, Path]) -> dict:
     if isinstance(filepath, str):
@@ -53,6 +53,7 @@ def load_config(filepath: Union[str, Path]) -> dict:
 
 
 class DatabaseClientBase(ABC):
+
     def __init__(self, buffer=None, write_interval=0.5, **kwargs):
         self._kwargs = kwargs
         self._client = None
@@ -77,6 +78,22 @@ class DatabaseClientBase(ABC):
 
     def convert(self, data):
         return data
+
+    async def async_drain(self):
+        """Flush the buffer to the database asynchronously."""
+        if self._buffer:
+            await self.write(self._buffer)
+            self._buffer = []
+
+    def drain(self):
+        """Start a new thread to flush the buffer to the database."""
+        import threading
+
+        threading.Thread(target=self._drain_thread).start()
+
+    def _drain_thread(self):
+        """Wrapper method for threaded draining."""
+        asyncio.run(self.drain())
 
     def close(self):
         """Shutdown the client."""

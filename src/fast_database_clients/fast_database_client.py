@@ -103,7 +103,7 @@ class DatabaseClientBase(ABC):
         while True:
             time_condition = (time.time() - self._last_write_time) > self.write_interval
             if self.buffer and (len(self.buffer) > WRITE_BATCH_SIZE or time_condition):
-                metrics = tuple(self.buffer.popleft() for _ in range(WRITE_BATCH_SIZE))
+                metrics = tuple(self.buffer.popleft() for _ in range(min(WRITE_BATCH_SIZE, len(self.buffer)))
                 self.write(metrics)
                 self._last_write_time = time.time()
 

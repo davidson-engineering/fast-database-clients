@@ -286,6 +286,8 @@ class FastInfluxDBClient(DatabaseClientBase):
         config_file: str = "config.toml",
         debug: None = None,
         enable_gzip: bool = False,
+        buffer=None,
+        write_interval=1,
         **kwargs,
     ):
         """
@@ -308,7 +310,7 @@ class FastInfluxDBClient(DatabaseClientBase):
         client = InfluxDBClient.from_config_file(
             config_file, debug, enable_gzip, **kwargs
         )
-        db_client = cls()
+        db_client = cls(buffer=buffer, write_interval=write_interval)
         db_client._client = client
         db_client.write_batch_size = config.get("write_batch_size") or WRITE_BATCH_SIZE
         default_write_precision = config.get("default_write_precision")
@@ -334,7 +336,10 @@ class FastInfluxDBClient(DatabaseClientBase):
             metrics = [metrics]
 
         metrics = [
-            dict_to_point(metric, write_precision=write_precision, local_tz=self.local_tz) for metric in metrics
+            dict_to_point(
+                metric, write_precision=write_precision, local_tz=self.local_tz
+            )
+            for metric in metrics
         ]
 
         return metrics
@@ -525,7 +530,9 @@ class FastInfluxDBClient(DatabaseClientBase):
         try:
             self.create_bucket(bucket)
         except InfluxDBError:
-            logging.warning("Provided token does not have sufficient permission to create buckets. This is non-critical.")
+            logging.warning(
+                "Provided token does not have sufficient permission to create buckets. This is non-critical."
+            )
 
     @property
     def org(self):

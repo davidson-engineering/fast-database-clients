@@ -335,6 +335,8 @@ class FastInfluxDBClient(DatabaseClientBase):
         if isinstance(metrics, (InfluxMetric, dict)):
             metrics = [metrics]
 
+        write_precision = write_precision or self.write_precision
+        
         metrics = [
             dict_to_point(
                 metric, write_precision=write_precision, local_tz=self.local_tz

@@ -335,6 +335,8 @@ class FastInfluxDBClient(DatabaseClientBase):
         if isinstance(metrics, (InfluxMetric, dict)):
             metrics = [metrics]
 
+        write_precision = write_precision or self.write_precision
+
         metrics = [
             dict_to_point(
                 metric, write_precision=write_precision, local_tz=self.local_tz
@@ -408,7 +410,10 @@ class FastInfluxDBClient(DatabaseClientBase):
                     )
                 except InfluxDBError as e:
                     outcome = ActionOutcome.FAILED
-                    raise ErrorException(f"Failed to write metrics: {e}") from e
+                    logger.error(
+                        f"Failed to write metrics, some metrics will be discarded. {e}",
+                        extra={"discarded_metrics": metrics_batch},
+                    )
                 finally:
                     logger.info(**log_action_outcome(outcome=outcome))
 

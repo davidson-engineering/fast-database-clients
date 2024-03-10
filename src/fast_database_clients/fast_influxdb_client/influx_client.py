@@ -32,7 +32,7 @@ Functions:
     convert_to_seconds: Convert a time string to seconds.
 """
 # ---------------------------------------------------------------------------
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, is_dataclass
 from typing import Iterable, Union, Tuple
 import re
 import logging
@@ -94,8 +94,11 @@ def dict_to_point(
     local_tz=None,
 ) -> Point:
 
-    if isinstance(data, InfluxMetric):
-        data = asdict(data)
+    if not isinstance(data, dict):
+        if is_dataclass(data):
+            data = asdict(data)
+        else:
+            raise ValueError("data must be a dict or a dataclass")
 
     measurement = data.pop("measurement")
     time_value = data.pop("time")

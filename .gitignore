@@ -163,3 +163,4 @@ cython_debug/
 build/
 config.toml
 .DS_Store
+.VSCodeCounter

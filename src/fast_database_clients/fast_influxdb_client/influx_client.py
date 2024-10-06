@@ -85,7 +85,7 @@ class FastInfluxDBClientConfigError(ErrorException):
 
 def verify_write_precision(write_precision: str) -> bool:
     assert isinstance(write_precision, str)
-    assert write_precision in set("ns", "us", "ms", "s")
+    assert write_precision in set(("ns", "us", "ms", "s"))
 
 
 def dict_to_point(

@@ -17,6 +17,7 @@ import asyncio
 MAX_BUFFER_LENGTH = 65_536
 WRITE_BATCH_SIZE = 5_000
 
+
 def load_config(filepath: Union[str, Path]) -> dict:
     if isinstance(filepath, str):
         filepath = Path(filepath)
@@ -103,7 +104,10 @@ class DatabaseClientBase(ABC):
         while True:
             time_condition = (time.time() - self._last_write_time) > self.write_interval
             if self.buffer and (len(self.buffer) > WRITE_BATCH_SIZE or time_condition):
-                metrics = tuple(self.buffer.popleft() for _ in range(min(WRITE_BATCH_SIZE, len(self.buffer))))
+                metrics = tuple(
+                    self.buffer.popleft()
+                    for _ in range(min(WRITE_BATCH_SIZE, len(self.buffer)))
+                )
                 self.write(metrics)
                 self._last_write_time = time.time()
 

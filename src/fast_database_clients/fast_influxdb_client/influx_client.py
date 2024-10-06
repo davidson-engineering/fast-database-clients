@@ -141,10 +141,29 @@ def localize_time(
     return timezone.localize(dt_utc)
 
 
-def chunks(lst, n):
-    """Yield successive n-sized chunks from lst."""
-    for i in range(0, len(lst), n):
-        yield lst[i : i + n]
+# def chunks(lst, n):
+#     """Yield successive n-sized chunks from lst."""
+#     for i in range(0, len(lst), n):
+#         yield lst[i : i + n]
+
+
+def chunks(lst, target_length):
+    """Yield successive chunks from lst based on the cumulative length of 'field' values."""
+    chunk = []
+    cumulative_length = 0
+
+    for d in lst:
+        field_length = len(d.get("field", ""))
+        if cumulative_length + field_length > target_length:
+            yield chunk
+            chunk = []
+            cumulative_length = 0
+
+        chunk.append(d)
+        cumulative_length += field_length
+
+    if chunk:
+        yield chunk
 
 
 def convert_to_seconds(time_string):
@@ -315,7 +334,9 @@ class FastInfluxDBClient(DatabaseClientBase):
         )
         db_client = cls(buffer=buffer, write_interval=write_interval)
         db_client._client = client
-        db_client.write_batch_size = config.get["influx"].get("write_batch_size") or WRITE_BATCH_SIZE
+        db_client.write_batch_size = (
+            config.get["influx"].get("write_batch_size") or WRITE_BATCH_SIZE
+        )
         default_write_precision = config.get["influx"].get("default_write_precision")
         if default_write_precision:
             verify_write_precision(default_write_precision)

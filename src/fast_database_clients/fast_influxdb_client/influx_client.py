@@ -335,9 +335,9 @@ class FastInfluxDBClient(DatabaseClientBase):
         db_client = cls(buffer=buffer, write_interval=write_interval)
         db_client._client = client
         db_client.write_batch_size = (
-            config.get["influx"].get("write_batch_size") or WRITE_BATCH_SIZE
+            config.get("influx").get("write_batch_size") or WRITE_BATCH_SIZE
         )
-        default_write_precision = config.get["influx"].get("default_write_precision")
+        default_write_precision = config.get("influx").get("default_write_precision")
         if default_write_precision:
             verify_write_precision(default_write_precision)
         db_client.default_write_precision = (

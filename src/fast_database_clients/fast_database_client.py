@@ -80,21 +80,21 @@ class DatabaseClientBase(ABC):
     def convert(self, data):
         return data
 
-    async def async_drain(self):
-        """Flush the buffer to the database asynchronously."""
-        if self._buffer:
-            await self.write(self._buffer)
-            self._buffer = []
+    # async def async_drain(self):
+    #     """Flush the buffer to the database asynchronously."""
+    #     if self._buffer:
+    #         await self.write(self._buffer)
+    #         self._buffer = []
 
-    def drain(self):
-        """Start a new thread to flush the buffer to the database."""
-        import threading
+    # def drain(self):
+    #     """Start a new thread to flush the buffer to the database."""
+    #     import threading
 
-        threading.Thread(target=self._drain_thread).start()
+    #     threading.Thread(target=self._drain_thread).start()
 
-    def _drain_thread(self):
-        """Wrapper method for threaded draining."""
-        asyncio.run(self.drain())
+    # def _drain_thread(self):
+    #     """Wrapper method for threaded draining."""
+    #     asyncio.run(self.async_drain())
 
     def close(self):
         """Shutdown the client."""

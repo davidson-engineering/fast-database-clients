@@ -38,9 +38,6 @@ import re
 import logging
 import os
 import sys
-from itertools import groupby
-from operator import attrgetter
-from typing import List
 from datetime import datetime
 import pytz
 
@@ -147,21 +144,20 @@ def localize_time(
 #         yield lst[i : i + n]
 
 
-def chunks(lst, target_length):
-    """Yield successive chunks from lst based on the cumulative length of 'field' values."""
+def chunks(iter, target_length):
+    """Yield successive chunks from iterator based on the cumulative length of 'field' values."""
     chunk = []
-    cumulative_length = 0
+    chunk_length = 0
 
-    for d in lst:
-        field_length = len(d.get("field", ""))
-        if cumulative_length + field_length > target_length:
+    # Build up chunks until the cumulative length of 'field' values exceeds the target length
+    for item in iter:
+        if chunk_length + 1 > target_length:
             yield chunk
             chunk = []
-            cumulative_length = 0
-
-        chunk.append(d)
-        cumulative_length += field_length
-
+            chunk_length = 0
+        chunk.append(item)
+        chunk_length += 1
+    # If there are any items left in the chunk, yield them
     if chunk:
         yield chunk
 
@@ -215,13 +211,13 @@ class BatchingCallback(object):
     It provides methods for handling success, error, and retry scenarios.
     """
 
-    def success(self, conf: (str, str, str), data: str):
+    def success(self, conf: Tuple[str, str, str], data: str):
         logger.debug(f"Written batch: {conf}, data: {data}")
 
-    def error(self, conf: (str, str, str), data: str, exception: InfluxDBError):
+    def error(self, conf: Tuple[str, str, str], data: str, exception: InfluxDBError):
         logger.error(f"Cannot write batch: {conf}, data: {data} due: {exception}")
 
-    def retry(self, conf: (str, str, str), data: str, exception: InfluxDBError):
+    def retry(self, conf: Tuple[str, str, str], data: str, exception: InfluxDBError):
         logger.warning(
             f"Retryable error occurs for batch: {conf}, data: {data} retry: {exception}"
         )
@@ -286,7 +282,7 @@ class FastInfluxDBClient(DatabaseClientBase):
         :param default_write_precision: The default write precision for metrics.
         :param kwargs: Additional keyword arguments.
         """
-        client = InfluxDBClient.__init__(
+        client = InfluxDBClient(
             url, token, debug, timeout, enable_gzip, org, default_tags, **kwargs
         )
         db_client = cls()
@@ -347,28 +343,26 @@ class FastInfluxDBClient(DatabaseClientBase):
         db_client.local_tz = config.get("influx").get("local_tz", "UTC")
         return db_client
 
-    def convert(
+    def convert_to_points(
         self, metrics: Union[InfluxMetric, dict], write_precision: str = None
-    ) -> Point:
+    ) -> Iterable[Point]:
         """
-        Convert a container of metrics to a Point object.
+        Convert a container of metrics to an Iterator of Point objects.
 
         :param metrics: The metrics to convert.
-        :return: The Point object.
+        :return: An Iterator of Point objects.
         """
         if isinstance(metrics, (InfluxMetric, dict)):
             metrics = [metrics]
 
         write_precision = write_precision or self.write_precision
 
-        metrics = [
+        yield (
             dict_to_point(
                 metric, write_precision=write_precision, local_tz=self.local_tz
             )
             for metric in metrics
-        ]
-
-        return metrics
+        )
 
     def write(
         self,
@@ -414,7 +408,7 @@ class FastInfluxDBClient(DatabaseClientBase):
                 )
             bucket = self.default_bucket
 
-        metrics = self.convert(metrics, write_precision=write_precision)
+        metrics = self.convert_to_points(metrics, write_precision=write_precision)
 
         with self._client.write_api(write_options=write_option) as write_api:
             metrics_chunks = chunks(metrics, self.write_batch_size)
@@ -567,8 +561,8 @@ class FastInfluxDBClient(DatabaseClientBase):
     def org(self):
         return self._client.org
 
-    def write_api(self):
-        return self._client.write_api()
+    # def write_api(self, *args, **kwargs):
+    #     return self._client.write_api(*args, **kwargs)
 
     def close(self):
         self.__del__()

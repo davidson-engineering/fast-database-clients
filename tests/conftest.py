@@ -1,5 +1,11 @@
 import pytest
 from fast_database_clients import FastInfluxDBClient
+from config_loader import load_configs
+
+
+@pytest.fixture
+def config_file():
+    return "tests/influxdb_testing_config.toml"
 
 
 @pytest.fixture

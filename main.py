@@ -11,8 +11,7 @@ from fast_database_clients import FastInfluxDBClient
 import random
 import time
 import logging
-from datetime import datetime, timezone
-from copy import deepcopy
+from datetime import datetime
 
 
 def setup_logging():
@@ -58,7 +57,7 @@ def main():
     5. Generates random data and sends it to the InfluxDB server.
     """
     bucket = "metrics2"
-    config_file = "config/influx_test.toml"
+    config_file = "config/influx_config.toml"
     # Create new client
     with FastInfluxDBClient.from_config_file(config_file=config_file) as client:
         print(f"{client=}")
@@ -66,24 +65,24 @@ def main():
         client.create_bucket(bucket)
 
         # Generate some random data, and send to influxdb server
-        data = random.random()
-        data2 = random.randint(0, 100)
-        data3 = random.choice([True, False])
+        data = lambda: random.random()
+        data2 = lambda: random.randint(0, 100)
+        data3 = lambda: random.choice([True, False])
 
-        metrics = [
-            dict(
+        def generate_metrics():
+            yield dict(
                 measurement="py_metric1",
-                fields={"data1": data, "data2": data2, "data3": data3},
+                fields={"data1": data(), "data2": data2(), "data3": data3()},
                 time=datetime.now(),
             )
-            for _ in range(10_000)
-        ]
-        client.buffer.extend(deepcopy(metrics))
+
+        metrics = generate_metrics()
+
         client.start()
-        while True:
-            print(len(client.buffer))
-            time.sleep(1)
-            client.buffer.extend(deepcopy(metrics))
+
+        while len(client.buffer) < 10_000:
+            client.buffer.extend([next(metrics) for _ in range(1_000)])
+            time.sleep(0.1)
 
 
 if __name__ == "__main__":

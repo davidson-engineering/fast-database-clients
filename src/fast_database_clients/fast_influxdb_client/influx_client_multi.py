@@ -8,7 +8,7 @@ from influxdb_client.client.exceptions import InfluxDBError
 from datetime import datetime, timedelta, timezone
 import logging
 from influxdb_client import InfluxDBClient
-from fast_database_clients.fast_database_client import DatabaseClientBase, load_config
+from fast_database_clients.fast_database_client import DatabaseClientBase
 
 logger = logging.getLogger(__name__)
 
@@ -148,6 +148,8 @@ class MultiInfluxDBClient(DatabaseClientBase):
 # Example Usage
 if __name__ == "__main__":
 
+    from config_loader import load_configs
+
     def generate_metrics(count: int):
         """
         Generate example metrics as dictionaries.
@@ -167,7 +169,7 @@ if __name__ == "__main__":
 
     # Example initialization with similar configuration to FastInfluxDBClient
     config_file = "config/.influx_live.toml"
-    config = load_config(config_file)
+    config = load_configs(config_file)
     url = config["influx2"]["url"]
     token = config["influx2"]["token"]
     org = config["influx2"]["org"]

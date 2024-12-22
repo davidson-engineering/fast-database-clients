@@ -47,7 +47,9 @@ from influxdb_client.client.exceptions import InfluxDBError
 from influxdb_client.client.write_api import SYNCHRONOUS
 from influxdb_client.rest import ApiException
 
-from fast_database_clients.fast_database_client import DatabaseClientBase, load_config
+from config_loader import load_configs
+
+from fast_database_clients.fast_database_client import DatabaseClientBase
 from fast_database_clients.fast_influxdb_client.influx_metric import (
     InfluxMetric,
     convert_time,
@@ -72,17 +74,10 @@ class FastInfluxDBClientConfigError(ErrorException):
     pass
 
 
-# def group_by_key(objects: List[dict], key) -> dict:
-#     sorted_objects = sorted(objects, key=attrgetter(key))
-#     grouped_objects = {
-#         key: list(group) for key, group in groupby(sorted_objects, key=attrgetter(key))
-#     }
-#     return grouped_objects
-
-
 def verify_write_precision(write_precision: str) -> bool:
     assert isinstance(write_precision, str)
     assert write_precision in set(("ns", "us", "ms", "s"))
+    return True
 
 
 def dict_to_point(
@@ -258,6 +253,8 @@ class FastInfluxDBClient(DatabaseClientBase):
         cls,
         url: str,
         token: str = None,
+        buffer: list = None,
+        write_interval: float = 1.0,
         default_bucket: str = None,
         debug=None,
         timeout: Union[int, Tuple[int, int]] = 10_000,
@@ -285,7 +282,7 @@ class FastInfluxDBClient(DatabaseClientBase):
         client = InfluxDBClient(
             url, token, debug, timeout, enable_gzip, org, default_tags, **kwargs
         )
-        db_client = cls()
+        db_client = cls(buffer=buffer, write_interval=write_interval)
         db_client._client = client
 
         if default_write_precision:
@@ -294,14 +291,18 @@ class FastInfluxDBClient(DatabaseClientBase):
             default_write_precision or DEFAULT_WRITE_PRECISION_DATA
         )
         db_client.write_batch_size = write_batch_size
-        if default_bucket is not None:
-            db_client.create_bucket(default_bucket)
+        # if default_bucket is not None:
+        #     db_client.create_bucket(default_bucket)
+        db_client.local_tz = kwargs.get("local_tz", "UTC")
+        db_client.default_bucket = default_bucket
+
         return db_client
 
     @classmethod
     def from_config_file(
         cls,
         config_file: str = "config.toml",
+        secrets_filepath: str = None,
         debug: None = None,
         enable_gzip: bool = False,
         buffer=None,
@@ -323,24 +324,21 @@ class FastInfluxDBClient(DatabaseClientBase):
             raise FastInfluxDBClientConfigError(
                 f"Config file '{config_file}' does not exist"
             )
-        config = load_config(config_file).get("database_client")
+        config = load_configs(filepaths=config_file, secrets_filepath=secrets_filepath)
 
-        client = InfluxDBClient.from_config_file(
-            config_file, debug, enable_gzip, **kwargs
+        influx_config = config.get("influx2")
+        db_config = config.get("database_client").get("influx")
+
+        db_client = FastInfluxDBClient.from_params(
+            buffer=buffer,
+            write_interval=write_interval,
+            debug=debug,
+            enable_gzip=enable_gzip,
+            **influx_config,
+            **db_config,
+            **kwargs,
         )
-        db_client = cls(buffer=buffer, write_interval=write_interval)
-        db_client._client = client
-        db_client.write_batch_size = (
-            config.get("influx").get("write_batch_size") or WRITE_BATCH_SIZE
-        )
-        default_write_precision = config.get("influx").get("default_write_precision")
-        if default_write_precision:
-            verify_write_precision(default_write_precision)
-        db_client.default_write_precision = (
-            default_write_precision or DEFAULT_WRITE_PRECISION_DATA
-        )
-        db_client.default_bucket = config.get("influx").get("default_bucket")
-        db_client.local_tz = config.get("influx").get("local_tz", "UTC")
+
         return db_client
 
     def convert_to_points(
@@ -496,6 +494,10 @@ class FastInfluxDBClient(DatabaseClientBase):
                 logger.info(f"Bucket {bucket_name} already exists")
             else:
                 raise e
+        except InfluxDBError:
+            logging.warning(
+                "Provided token does not have sufficient permission to create buckets. This is non-critical."
+            )
 
     def update_bucket(self, bucket_name: str, retention_duration: str = "30d"):
         """
@@ -541,21 +543,6 @@ class FastInfluxDBClient(DatabaseClientBase):
         :return: bool ping status.
         """
         return self._client.ping()
-
-    @property
-    def default_bucket(self):
-        return self._default_bucket
-
-    @default_bucket.setter
-    def default_bucket(self, bucket: str):
-        self._default_bucket = bucket
-        # If the bucket does not exist, create it
-        try:
-            self.create_bucket(bucket)
-        except InfluxDBError:
-            logging.warning(
-                "Provided token does not have sufficient permission to create buckets. This is non-critical."
-            )
 
     @property
     def org(self):

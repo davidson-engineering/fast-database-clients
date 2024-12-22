@@ -7,50 +7,12 @@
 # ---------------------------------------------------------------------------
 
 from abc import ABC, abstractmethod
-from typing import Union
-from pathlib import Path
 from collections import deque
 import threading
 import time
-import asyncio
 
 MAX_BUFFER_LENGTH = 65_536
 WRITE_BATCH_SIZE = 5_000
-
-
-def load_config(filepath: Union[str, Path]) -> dict:
-    if isinstance(filepath, str):
-        filepath = Path(filepath)
-
-    if not Path(filepath).exists():
-        raise FileNotFoundError(f"File not found: {filepath}")
-
-    # if extension is .json
-    if filepath.suffix == ".json":
-        import json
-
-        with open(filepath, "r") as file:
-            return json.load(file)
-
-    # if extension is .yaml
-    if filepath.suffix == ".yaml":
-        import yaml
-
-        with open(filepath, "r") as file:
-            return yaml.safe_load(file)
-    # if extension is .toml
-    if filepath.suffix == ".toml":
-        try:
-            import tomllib
-        except ImportError:
-            import tomli as tomllib
-
-        with open(filepath, "rb") as file:
-            return tomllib.load(file)
-
-    # else load as binary
-    with open(filepath, "rb") as file:
-        return file.read()
 
 
 class DatabaseClientBase(ABC):
@@ -79,22 +41,6 @@ class DatabaseClientBase(ABC):
 
     def convert(self, data):
         return data
-
-    # async def async_drain(self):
-    #     """Flush the buffer to the database asynchronously."""
-    #     if self._buffer:
-    #         await self.write(self._buffer)
-    #         self._buffer = []
-
-    # def drain(self):
-    #     """Start a new thread to flush the buffer to the database."""
-    #     import threading
-
-    #     threading.Thread(target=self._drain_thread).start()
-
-    # def _drain_thread(self):
-    #     """Wrapper method for threaded draining."""
-    #     asyncio.run(self.async_drain())
 
     def close(self):
         """Shutdown the client."""

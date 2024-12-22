@@ -166,3 +166,5 @@ config.toml
 .VSCodeCounter
 
 .*
+
+!.env-default

@@ -1,8 +1,8 @@
 [influx2]
-url = "http://localhost:8087"
-token = "super_secret_token"
-org = "my_org"
-timeout = 6000
+url = "${INFLUXDB_URL}"
+token = "${INFLUXDB_TOKEN}"
+org = "${INFLUXDB_ORG}"
+timeout = 6_000
 connection_pool_maxsize = 25
 auth_basic = false
 

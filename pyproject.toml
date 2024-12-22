@@ -2,47 +2,47 @@
 name = "fast-database-clients"
 description = "A class to facilitate rapid deployment of clients to send data to various databases"
 
-# If a project, then you can specify version here
-# version = "0.0.0"
-# If a module, then fetch version dynamically (see [tool.setuptools.dynamic] below)
-dynamic = ["version"]
+version = "2.2.1"
+
 
 readme = "README.md"
 requires-python = ">=3.8"
-license = {file = "LICENSE"}
+license = { file = "LICENSE" }
 authors = [
-  {email = "matthew@davidson.engineering"},
-  {name = "Matthew Davidson"}
+  { email = "matthew@davidson.engineering" },
+  { name = "Matthew Davidson" },
 ]
 
 classifiers = [
-    "Development Status :: 1 - Planning",
-    "Operating System :: Microsoft :: Windows",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+  "Development Status :: 1 - Planning",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
 ]
 
 dependencies = [
-   "influxdb_client >= 1.40.0",
-   "tomli >= 2.0.1 ; python_version < '3.11'",
-   "pyyaml >= 6.0.1",
-   "pytz >= 2024.1",
+  "influxdb_client >= 1.40.0",
+  "tomli >= 2.0.1 ; python_version < '3.11'",
+  "pyyaml >= 6.0.1",
+  "pytz >= 2024.1",
+  "config-loader @ git+https://github.com/davidson-engineering/python-config-loader.git@v0.1.3",
 ]
 
 # [tool.setuptools]
 # packages = ["fast_database_clients"]
 
-# If a module, then use fetch version from src/module_name/__init__.py
-[tool.setuptools.dynamic]
-version = {attr = "fast_database_clients.__version__"}
+[tool.uv.sources]
+fast-database-clients = { workspace = true }
+
+[dependency-groups]
+dev = ["fast-database-clients"]
 
 [project.optional-dependencies]
-test = [
-  "pytest >= 8.0.0",
-]
+test = ["pytest >= 8.0.0"]
 
 [project.urls]
 # homepage = "https://example.com"

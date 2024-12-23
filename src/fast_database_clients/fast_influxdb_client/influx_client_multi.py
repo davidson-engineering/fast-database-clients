@@ -157,7 +157,7 @@ if __name__ == "__main__":
         :param count: Number of metrics to generate.
         :return: A generator yielding metrics.
         """
-        start_time = datetime.now(timezone.utc) - timedelta(hours=1)
+        start_time = datetime.now(timezone.utc) - timedelta(hours=0.5)
         for i in range(count):
 
             yield {
@@ -168,7 +168,7 @@ if __name__ == "__main__":
             }
 
     # Example initialization with similar configuration to FastInfluxDBClient
-    config_file = "config/.influx_live.toml"
+    config_file = "config/influx_config.toml"
     config = load_configs(config_file)
     url = config["influx2"]["url"]
     token = config["influx2"]["token"]
@@ -196,7 +196,7 @@ if __name__ == "__main__":
         num_workers=6,
     ) as client:
         # Generate 100,000 example metrics
-        metrics = generate_metrics(500_000)
+        metrics = generate_metrics(1_000_000)
         client.write(metrics)
 
     end_time = time.perf_counter()

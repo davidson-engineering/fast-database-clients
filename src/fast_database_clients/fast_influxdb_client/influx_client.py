@@ -296,6 +296,8 @@ class FastInfluxDBClient(DatabaseClientBase):
         db_client.local_tz = kwargs.get("local_tz", "UTC")
         db_client.default_bucket = default_bucket
 
+        db_client.create_bucket(default_bucket)
+
         return db_client
 
     @classmethod

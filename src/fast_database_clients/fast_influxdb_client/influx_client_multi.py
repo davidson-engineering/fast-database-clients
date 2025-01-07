@@ -1,3 +1,4 @@
+from collections import deque
 from dataclasses import asdict, dataclass
 from multiprocessing import Process, JoinableQueue, cpu_count
 from typing import Any, Dict, Mapping, Union, Iterable
@@ -109,7 +110,7 @@ class MultiInfluxDBClientConfig(UnpackMixin):
     token: str
     org: str
     bucket: str
-    queue: JoinableQueue = None
+    buffer: deque
     timeout: int = 10_000
     num_workers: int = 4
     batch_size: int = 5000
@@ -131,7 +132,7 @@ class MultiInfluxDBClient(DatabaseClientBase):
         token: str,
         org: str,
         bucket: str,
-        queue: JoinableQueue = None,
+        buffer: deque,
         timeout: int = 10_000,
         num_workers: int = 4,
         batch_size: int = 5_000,
@@ -148,7 +149,7 @@ class MultiInfluxDBClient(DatabaseClientBase):
         :param token: InfluxDB token.
         :param default_bucket: Default bucket name.
         :param timeout: Timeout in milliseconds.
-        :param queue: A JoinableQueue for communication between the main process and
+        :param queue: A buffer for communication between the main process and
             worker processes.
         :param write_precision: Write precision for timestamps.
 
@@ -161,23 +162,22 @@ class MultiInfluxDBClient(DatabaseClientBase):
         self.batch_size = batch_size
         self.timeout = timeout
         self.write_precision = write_precision
-        self.queue = queue or JoinableQueue()
+        self.buffer = buffer
+        self.queue = JoinableQueue()
         self.processes = []
+
+        self.num_workers = (
+            cpu_count() if num_workers == -1 else min(num_workers, cpu_count())
+        )
+
+        super().__init__(
+            buffer=self.buffer, write_batch_size=batch_size * self.num_workers
+        )
 
     def start_workers(self):
         """
         Start worker processes.
         """
-        num_workers = (
-            cpu_count()
-            if self.num_workers == -1
-            else min(self.num_workers, cpu_count())
-        )
-
-        if self.num_workers > cpu_count():
-            logger.warning(
-                f"Number of workers ({self.num_workers}) exceeds CPU count ({cpu_count()}). Using {num_workers} workers."
-            )
 
         writer_config = InfluxDBWriterConfig(
             url=self.url,
@@ -189,7 +189,7 @@ class MultiInfluxDBClient(DatabaseClientBase):
 
         self.processes = [
             InfluxDBWriter(queue=self.queue, config=writer_config)
-            for _ in range(num_workers)
+            for _ in range(self.num_workers)
         ]
 
         for process in self.processes:
@@ -263,8 +263,10 @@ if __name__ == "__main__":
     # Example initialization with similar configuration to FastInfluxDBClient
     config_file = "config/influx_config.toml"
     config = load_configs(config_file)
+    buffer = deque()
     influx_client_config = MultiInfluxDBClientConfig(
         url=config["influx2"]["url"],
+        buffer=buffer,
         token=config["influx2"]["token"],
         org=config["influx2"]["org"],
         timeout=config["influx2"]["timeout"],
@@ -279,7 +281,12 @@ if __name__ == "__main__":
     with MultiInfluxDBClient(**influx_client_config) as client:
         # Generate 100,000 example metrics
         metrics = generate_metrics(1_000_00)
-        client.write(metrics)
+        for metric in metrics:
+            buffer.append(metric)
+        client.start()
+
+        while len(buffer) > 0:
+            time.sleep(0.1)
 
     end_time = time.perf_counter()
 

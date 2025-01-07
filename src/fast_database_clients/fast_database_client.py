@@ -8,6 +8,7 @@
 
 from abc import ABC, abstractmethod
 from collections import deque
+import itertools
 import threading
 import time
 
@@ -17,15 +18,23 @@ WRITE_BATCH_SIZE = 5_000
 
 class DatabaseClientBase(ABC):
 
-    def __init__(self, buffer=None, write_interval=0.5, **kwargs):
+    def __init__(
+        self,
+        buffer=None,
+        write_interval=0.5,
+        write_batch_size=WRITE_BATCH_SIZE,
+        **kwargs,
+    ):
         self._kwargs = kwargs
         self._client = None
         self._last_write_time = time.time()
         self.write_interval = write_interval
+        self.write_batch_size = write_batch_size
         if buffer is not None:
             self.buffer = buffer
         else:
             self.buffer = deque(maxlen=MAX_BUFFER_LENGTH)
+        self._stop_event = threading.Event()
 
     @abstractmethod
     def ping(self): ...
@@ -47,15 +56,33 @@ class DatabaseClientBase(ABC):
         self.__del__()
 
     def write_periodically(self):
-        while True:
+        while not self._stop_event.is_set():
             time_condition = (time.time() - self._last_write_time) > self.write_interval
-            if self.buffer and (len(self.buffer) > WRITE_BATCH_SIZE or time_condition):
-                metrics = tuple(
+            if self.buffer and (
+                len(self.buffer) >= self.write_batch_size or time_condition
+            ):
+                # Cache current time for consistent comparisons
+                now = time.time()
+                batch_size = min(self.write_batch_size, len(self.buffer))
+
+                # Use itertools.islice for efficient batch processing
+                metrics = tuple(itertools.islice(self.buffer, batch_size))
+
+                # Remove processed items from the buffer
+                for _ in range(batch_size):
                     self.buffer.popleft()
-                    for _ in range(min(WRITE_BATCH_SIZE, len(self.buffer)))
-                )
-                self.write(metrics)
-                self._last_write_time = time.time()
+
+                try:
+                    self.write(metrics)
+                except Exception as e:
+                    # Handle write exceptions
+                    print(f"Write operation failed: {e}")
+
+                # Update last write time
+                self._last_write_time = now
+            else:
+                # Sleep briefly to prevent busy waiting
+                time.sleep(min(self.write_interval, 0.1))
 
     def start(self):
         self.write_thread = threading.Thread(
@@ -63,7 +90,11 @@ class DatabaseClientBase(ABC):
         )
         self.write_thread.start()
 
+    def stop(self):
+        self._stop_event.set()
+
     def __del__(self):
+        self.stop()
         self.write_thread.join()
 
     def __enter__(self):

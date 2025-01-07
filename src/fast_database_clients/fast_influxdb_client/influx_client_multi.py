@@ -110,7 +110,6 @@ class MultiInfluxDBClientConfig(UnpackMixin):
     token: str
     org: str
     bucket: str
-    buffer: deque
     timeout: int = 10_000
     num_workers: int = 4
     batch_size: int = 5000
@@ -266,7 +265,6 @@ if __name__ == "__main__":
     buffer = deque()
     influx_client_config = MultiInfluxDBClientConfig(
         url=config["influx2"]["url"],
-        buffer=buffer,
         token=config["influx2"]["token"],
         org=config["influx2"]["org"],
         timeout=config["influx2"]["timeout"],
@@ -278,7 +276,7 @@ if __name__ == "__main__":
 
     start_time = time.perf_counter()
 
-    with MultiInfluxDBClient(**influx_client_config) as client:
+    with MultiInfluxDBClient(buffer=buffer, **influx_client_config) as client:
         # Generate 100,000 example metrics
         metrics = generate_metrics(1_000_00)
         for metric in metrics:

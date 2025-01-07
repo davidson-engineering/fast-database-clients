@@ -2,7 +2,7 @@
 name = "fast-database-clients"
 description = "A class to facilitate rapid deployment of clients to send data to various databases"
 
-version = "2.2.1"
+version = "2.2.2"
 
 readme = "README.md"
 requires-python = ">=3.8"

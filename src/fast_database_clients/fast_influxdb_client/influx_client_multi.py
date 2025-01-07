@@ -1,5 +1,6 @@
-from multiprocessing import Process, Manager, Queue
-from typing import Any, Dict, Union, Iterable
+from dataclasses import asdict, dataclass
+from multiprocessing import Process, JoinableQueue, cpu_count
+from typing import Any, Dict, Mapping, Union, Iterable
 from influxdb_client.client.write_api import WriteOptions, WriteType
 import reactivex as rx
 from reactivex import operators as ops
@@ -13,39 +14,50 @@ from fast_database_clients.fast_database_client import DatabaseClientBase
 logger = logging.getLogger(__name__)
 
 
-class InfluxDBWriter(Process):
+class UnpackMixin(Mapping):
+    def __iter__(self):
+        return iter(asdict(self).keys())
+
+    def __len__(self):
+        return len(asdict(self))
+
+    def __getitem__(self, key):
+        if key not in asdict(self):
+            raise KeyError(f"Key {key} not found in {self.__class__.__name__}")
+        return getattr(self, key)
+
+
+class DatabaseWriter(Process):
     """
     A writer process for uploading signal data to InfluxDB in batches using multiprocessing.
     """
 
-    def __init__(self, queue: Queue, influx_config: Dict[str, Any]):
+    def __init__(self, queue: JoinableQueue, config: Dict[str, Any]):
         super().__init__()
         self.queue = queue
-        self.influx_config = influx_config
+        self.config = config
         self.client = None
-        self.write_api = None
+
+    def initialize_client(self):
+        raise NotImplementedError("initialize_client not implemented.")
+
+    def write(self, batch: Iterable[Dict[str, Any]]):
+        raise NotImplementedError("write not implemented.")
 
     def run(self):
-        self.client = InfluxDBClient(
-            url=self.influx_config["url"],
-            token=self.influx_config["token"],
-            org=self.influx_config["org"],
-        )
-        self.write_api = self.client.write_api(
-            write_options=WriteOptions(write_type=WriteType.batching)
-        )
-
+        self.initialize_client()
+        if self.client is None:
+            msg = "Client not properly initialized."
+            logger.error(msg, extra={"client": self.client})
+            raise ValueError(msg)
         logger.debug(f"{self.name}: Writer started.")
         while True:
             batch = self.queue.get()
             if batch is None:  # Termination signal
                 logger.debug(f"{self.name}: Received termination signal.")
                 break
-            try:
-                self.write_api.write(bucket=self.influx_config["bucket"], record=batch)
-                self.queue.task_done()
-            except InfluxDBError as e:
-                logger.error(f"{self.name}: Failed to write batch: {e}")
+            logger.debug(f"{self.name}: Writing batch of {len(batch)} records.")
+            self.write(batch)
 
         self._close()
 
@@ -55,6 +67,53 @@ class InfluxDBWriter(Process):
             self.write_api.close()
         if self.client:
             self.client.close()
+
+
+@dataclass
+class InfluxDBWriterConfig:
+    url: str
+    token: str
+    org: str
+    bucket: str
+    write_precision: str = "ms"
+
+
+class InfluxDBWriter(DatabaseWriter):
+
+    def initialize_client(self):
+        self.client = InfluxDBClient(
+            url=self.config.url,
+            token=self.config.token,
+            org=self.config.org,
+        )
+        self.write_api = self.client.write_api(
+            write_options=WriteOptions(write_type=WriteType.batching)
+        )
+
+    def write(self, batch: Iterable[Dict[str, Any]]):
+
+        try:
+            self.write_api.write(
+                bucket=self.config.bucket,
+                record=batch,
+                write_precision=self.config.write_precision,
+            )
+            self.queue.task_done()
+        except InfluxDBError as e:
+            logger.error(f"{self.name}: Failed to write batch: {e}")
+
+
+@dataclass
+class MultiInfluxDBClientConfig(UnpackMixin):
+    url: str
+    token: str
+    org: str
+    bucket: str
+    queue: JoinableQueue = None
+    timeout: int = 10_000
+    num_workers: int = 4
+    batch_size: int = 5000
+    write_precision: str = "ms"
 
 
 class MultiInfluxDBClient(DatabaseClientBase):
@@ -68,10 +127,15 @@ class MultiInfluxDBClient(DatabaseClientBase):
 
     def __init__(
         self,
-        influx_config: Dict[str, Any],
+        url: str,
+        token: str,
+        org: str,
+        bucket: str,
+        queue: JoinableQueue = None,
         timeout: int = 10_000,
-        num_workers: int = 6,
+        num_workers: int = 4,
         batch_size: int = 5_000,
+        write_precision: str = "ms",
     ):
         """
         Initialize the MultiProcInfluxDBClient.
@@ -84,23 +148,50 @@ class MultiInfluxDBClient(DatabaseClientBase):
         :param token: InfluxDB token.
         :param default_bucket: Default bucket name.
         :param timeout: Timeout in milliseconds.
+        :param queue: A JoinableQueue for communication between the main process and
+            worker processes.
+        :param write_precision: Write precision for timestamps.
 
         """
-        self.influx_config = influx_config
+        self.url = url
+        self.token = token
+        self.org = org
+        self.bucket = bucket
         self.num_workers = num_workers
         self.batch_size = batch_size
         self.timeout = timeout
-        self.queue = Manager().Queue()
+        self.write_precision = write_precision
+        self.queue = queue or JoinableQueue()
         self.processes = []
 
     def start_workers(self):
         """
         Start worker processes.
         """
+        num_workers = (
+            cpu_count()
+            if self.num_workers == -1
+            else min(self.num_workers, cpu_count())
+        )
+
+        if self.num_workers > cpu_count():
+            logger.warning(
+                f"Number of workers ({self.num_workers}) exceeds CPU count ({cpu_count()}). Using {num_workers} workers."
+            )
+
+        writer_config = InfluxDBWriterConfig(
+            url=self.url,
+            token=self.token,
+            org=self.org,
+            bucket=self.bucket,
+            write_precision=self.write_precision,
+        )
+
         self.processes = [
-            InfluxDBWriter(queue=self.queue, influx_config=self.influx_config)
-            for _ in range(self.num_workers)
+            InfluxDBWriter(queue=self.queue, config=writer_config)
+            for _ in range(num_workers)
         ]
+
         for process in self.processes:
             process.start()
 
@@ -150,6 +241,8 @@ if __name__ == "__main__":
 
     from config_loader import load_configs
 
+    logging.basicConfig(level=logging.INFO)
+
     def generate_metrics(count: int):
         """
         Generate example metrics as dictionaries.
@@ -170,35 +263,26 @@ if __name__ == "__main__":
     # Example initialization with similar configuration to FastInfluxDBClient
     config_file = "config/influx_config.toml"
     config = load_configs(config_file)
-    url = config["influx2"]["url"]
-    token = config["influx2"]["token"]
-    org = config["influx2"]["org"]
-    timeout = config["influx2"]["timeout"]
-    default_bucket = config["database_client"]["influx"]["default_bucket"]
-    default_write_precision = config["database_client"]["influx"][
-        "default_write_precision"
-    ]
-    batch_size = config["database_client"]["influx"]["write_batch_size"]
-    influx_config = {
-        "url": url,
-        "token": token,
-        "org": org,
-        "bucket": default_bucket,
-    }
+    influx_client_config = MultiInfluxDBClientConfig(
+        url=config["influx2"]["url"],
+        token=config["influx2"]["token"],
+        org=config["influx2"]["org"],
+        timeout=config["influx2"]["timeout"],
+        bucket=config["database_client"]["influx"]["default_bucket"],
+        batch_size=config["database_client"]["influx"]["write_batch_size"],
+        num_workers=4,
+    )
     import time
 
     start_time = time.perf_counter()
 
-    with MultiInfluxDBClient(
-        influx_config=influx_config,
-        batch_size=batch_size,
-        timeout=timeout,
-        num_workers=6,
-    ) as client:
+    with MultiInfluxDBClient(**influx_client_config) as client:
         # Generate 100,000 example metrics
-        metrics = generate_metrics(1_000_000)
+        metrics = generate_metrics(1_000_00)
         client.write(metrics)
 
     end_time = time.perf_counter()
 
-    print("Data ingestion completed in {:.2f} seconds.".format(end_time - start_time))
+    logger.info(
+        "Data ingestion completed in {:.2f} seconds.".format(end_time - start_time)
+    )

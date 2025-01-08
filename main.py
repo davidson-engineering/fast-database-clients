@@ -70,18 +70,20 @@ def main():
         data3 = lambda: random.choice([True, False])
 
         def generate_metrics():
-            yield dict(
-                measurement="py_metric1",
-                fields={"data1": data(), "data2": data2(), "data3": data3()},
-                time=datetime.now(),
-            )
+            while True:
+                yield dict(
+                    measurement="py_metric1",
+                    fields={"data1": data(), "data2": data2(), "data3": data3()},
+                    time=datetime.now(),
+                )
 
         metrics = generate_metrics()
 
         client.start()
 
-        while len(client.buffer) < 10_000:
-            client.buffer.extend([next(metrics) for _ in range(1_000)])
+        client.buffer.extend([next(metrics) for _ in range(30_000)])
+
+        while len(client.buffer) > 0:
             time.sleep(0.1)
 
 

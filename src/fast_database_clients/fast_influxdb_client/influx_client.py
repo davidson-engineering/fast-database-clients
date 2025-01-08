@@ -357,7 +357,7 @@ class FastInfluxDBClient(DatabaseClientBase):
 
         write_precision = write_precision or self.write_precision
 
-        yield (
+        return (
             dict_to_point(
                 metric, write_precision=write_precision, local_tz=self.local_tz
             )
@@ -413,6 +413,7 @@ class FastInfluxDBClient(DatabaseClientBase):
         with self._client.write_api(write_options=write_option) as write_api:
             metrics_chunks = chunks(metrics, self.write_batch_size)
             for metrics_batch in metrics_chunks:
+                metrics_batch = list(metrics_batch)
                 number_of_metrics = len(metrics_batch)
                 log_action_outcome = ActionOutcomeMessage(
                     action=f"Sending {number_of_metrics} metrics to influxdb",
@@ -428,9 +429,10 @@ class FastInfluxDBClient(DatabaseClientBase):
                     )
                 except InfluxDBError as e:
                     outcome = ActionOutcome.FAILED
+                    metrics_batch_names = set(point.name for point in metrics_batch)
                     logger.error(
-                        f"Failed to write metrics, some metrics will be discarded. {e}",
-                        extra={"discarded_metrics": metrics_batch},
+                        f"Failed to write metrics, {number_of_metrics} metrics will be discarded. {e}",
+                        extra={"discarded_metric_names": metrics_batch_names},
                     )
                 finally:
                     logger.info(**log_action_outcome(outcome=outcome))

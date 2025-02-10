@@ -11,6 +11,9 @@ from collections import deque
 import itertools
 import threading
 import time
+import logging
+
+logger = logging.getLogger(__name__)
 
 MAX_BUFFER_LENGTH = 65_536
 WRITE_BATCH_SIZE = 5_000
@@ -73,7 +76,7 @@ class DatabaseClientBase(ABC):
                     try:
                         self.write(metrics)
                     except Exception as e:
-                        print(f"Write operation failed: {e}")
+                        logger.error(f"Write operation failed: {e}", exc_info=True)
                     self._last_write_time = now
                 else:
                     time.sleep(min(self.write_interval, 0.1))

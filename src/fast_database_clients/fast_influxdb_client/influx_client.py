@@ -92,23 +92,14 @@ def dict_to_point(
         else:
             raise ValueError("data must be a dict or a dataclass")
 
-    measurement = data.pop("measurement")
-    time_value = data.pop("time")
-    fields = data.pop("fields")
+    write_precision = data.pop("write_precision") or DEFAULT_WRITE_PRECISION_DATA
 
     if local_tz:
-        time_value = localize_time(time_value, local_tz)
+        data["time"] = localize_time(data["time"], local_tz)
 
-    time_value = convert_time(time_value, write_precision)
+    data["time"] = convert_time(data["time"], write_precision)
 
-    point = Point(measurement).time(time_value, write_precision)
-
-    for field_name, field_value in fields.items():
-        point.field(field_name, field_value)
-
-    if "tags" in data:
-        for tag_name, tag_value in data.pop("tags").items():
-            point.tag(tag_name, tag_value)
+    point = Point.from_dict(data, write_precision=write_precision)
 
     return point
 

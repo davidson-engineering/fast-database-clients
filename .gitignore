@@ -168,3 +168,4 @@ config.toml
 .*
 
 !.env-default
+.DS_Store
